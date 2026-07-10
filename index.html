@@ -322,7 +322,15 @@
                 <h3 class="text-lg font-industrial uppercase tracking-wider text-white">Error de Conexión</h3>
                 <p class="text-chrome text-sm mt-1" id="error-message">Revisa los permisos de la carpeta en Drive.</p>
             </div>
-
+<div class="mb-4 space-y-3">
+  <input
+    id="tag-search-input"
+    type="text"
+    placeholder="Buscar por tag o nombre..."
+    class="w-full p-3 bg-black text-white border border-gray-600 rounded"
+  />
+  <div id="tag-chips" class="flex flex-wrap gap-2 hidden"></div>
+</div>
             <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 relative z-10">
                 <!-- Items -->
             </div>
@@ -1362,7 +1370,7 @@ async function addSelectionToPlaylist(playlistId) {
 
                             <div class="footerbar">
                                 <div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">LISTO</div>
-                                <div class="vjs-small hidden sm:block">Velocidad, volumen y controles incluidos</div>
+        
                             </div>
                         </div>
                     </div>
@@ -1419,5 +1427,31 @@ async function addSelectionToPlaylist(playlistId) {
 
         document.addEventListener('DOMContentLoaded', () => { checkExistingSession(); initGoogleAuth(); });
     </script>
+    <div id="edit-tags-modal" class="hidden fixed inset-0 z-[300] items-center justify-center bg-black/80">
+  <div class="bg-[#1a1a1a] border border-gray-700 rounded-lg p-4 w-full max-w-md">
+    <h3 id="edit-tags-title" class="text-white text-lg mb-3">EDITAR TAGS</h3>
+    <input
+      id="edit-tags-input"
+      type="text"
+      class="w-full p-3 bg-black text-white border border-gray-600 rounded"
+      placeholder="tag1, tag2, tag3"
+    />
+    <div class="flex gap-2 mt-4 justify-end">
+      <button onclick="closeEditTagsModal()" class="px-4 py-2 border border-gray-600 text-white">Cancelar</button>
+      <button onclick="saveTagsFromModal()" class="px-4 py-2 bg-red-600 text-white">Guardar</button>
+    </div>
+  </div>
+</div>
+    <div id="confirm-modal" class="hidden fixed inset-0 z-[300] items-center justify-center bg-black/80">
+  <div class="bg-[#1a1a1a] border border-gray-700 rounded-lg p-4 w-full max-w-md">
+    <h3 id="confirm-modal-title" class="text-white text-lg mb-3">Confirmar</h3>
+    <p id="confirm-modal-text" class="text-gray-300 mb-4"></p>
+    <div class="flex gap-2 justify-end">
+      <button onclick="closeConfirmModal()" class="px-4 py-2 border border-gray-600 text-white">Cancelar</button>
+      <button id="confirm-modal-delete-btn" class="px-4 py-2 bg-red-600 text-white">Eliminar</button>
+        <button id="lightbox-tags-btn" class="vjs-btn">EDITAR TAGS</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
