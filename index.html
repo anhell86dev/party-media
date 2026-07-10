@@ -742,6 +742,7 @@ async function saveTagsFromModal() {
   document.getElementById('app-shell').classList.remove('hidden');
   document.getElementById('app-shell').classList.add('flex');
   document.getElementById('account-email').textContent = email.split('@')[0];
+  requestDriveAccessOnLogin();
   await loadPlaylists();
   await initApp();
   if (showWelcomeToast) showToast('ACCESO CONCEDIDO');
@@ -909,6 +910,7 @@ async function addSelectionToPlaylist(playlistId) {
             document.getElementById('login-screen').classList.remove('flex'); document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-shell').classList.remove('hidden'); document.getElementById('app-shell').classList.add('flex');
             document.getElementById('account-email').textContent = email.split('@')[0];
+            requestDriveAccessOnLogin();
             loadPlaylists(); initApp(); if (showWelcomeToast) showToast('ACCESO CONCEDIDO');
         }
 
@@ -936,6 +938,12 @@ async function addSelectionToPlaylist(playlistId) {
         }
         function ensureDriveAuth(action) { if (accessToken) { action(); return; } if (!tokenClient) { showToast('Módulo no listo, reintenta', true); return; } pendingAuthAction = action; tokenClient.requestAccessToken({ prompt: '' }); }
         function handleAuthExpired() { accessToken = null; showToast('Sesión caducada, reintenta', true); }
+
+        function requestDriveAccessOnLogin(retries = 20) {
+            if (accessToken) return;
+            if (!tokenClient) { if (retries <= 0) return; setTimeout(() => requestDriveAccessOnLogin(retries - 1), 300); return; }
+            ensureDriveAuth(() => {});
+        }
 
         function requestDeleteMedia(index) { const arr = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); openConfirmDelete(arr[index]); }
         function requestDeleteCurrentMedia() { const arr = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); openConfirmDelete(arr[currentLightboxIndex]); }
