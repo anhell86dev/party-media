@@ -127,8 +127,45 @@ function openLightbox(index) {
   lightbox.classList.remove('hidden');
   lightbox.classList.add('flex');
 }
-function updateLightboxContent(mediaArray){ const media=mediaArray[currentLightboxIndex]; const contentContainer=document.getElementById('lightbox-content'); document.getElementById('lightbox-title').textContent=media.name; if(vjsPlayer){ vjsPlayer.dispose(); vjsPlayer=null; } contentContainer.innerHTML='<div id="media-wrapper" class="w-full h-full flex items-center justify-center"></div>'; const wrapper=document.getElementById('media-wrapper'); if(media.type==='image'){ const hqImg=media.thumbnail.replace('=s600','=s2000'); wrapper.innerHTML=`<img src="${hqImg}" class="max-w-full max-h-[85vh] object-contain rounded-sm metallic-edge shadow-[0_20px_50px_rgba(0,0,0,0.8)] fade-in" alt="${media.name}">`; scheduleAutoAdvance(media); } else if(media.type==='video'){ clearAutoplayTimer(); resetProgressBar(); if(autoplayEnabled){ const bar=document.getElementById('autoplay-progress-bar'); if(bar){ bar.style.transition='none'; bar.style.width='100%'; } } wrapper.innerHTML=`<div class="w-full max-w-5xl fade-in metallic-edge rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.8)]"><div class="player-shell relative"><div class="topbar"><div class="flex-1 min-w-0 pr-4"><div class="vjs-title truncate">${media.name}</div><div class="vjs-meta">HTML5 + Video.js</div></div><div class="actions"><button class="vjs-btn cursor-pointer select-none" id="back10"><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button><button class="vjs-btn primary cursor-pointer select-none" id="togglePlay"><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button><button class="vjs-btn cursor-pointer select-none" id="fwd10">10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button><button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button><button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button></div></div><div class="video-wrap"><video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" crossorigin="anonymous" poster="${media.thumbnail.replace('=s600','=s2000')}"><source src="${media.downloadUrl}" type="video/mp4" />Tu navegador no soporta video HTML5.</video></div><div class="footerbar"><div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">LISTO</div><div class="vjs-small hidden sm:block">Velocidad, volumen y controles incluidos</div></div></div></div>`; vjsPlayer=videojs('my-video',{ controls:true, fluid:true, playbackRates:[0.5,1,1.5,2,4], preload:'auto', responsive:true, aspectRatio:'16:9', controlBar:{ pictureInPictureToggle:false }}); const statusEl=document.getElementById('vjs-status'); const setStatus=txt=>{ if(statusEl) statusEl.textContent=txt; }; const seek=seconds=>{ const t=Math.max(0,vjsPlayer.currentTime()+seconds); vjsPlayer.currentTime(t); }; document.getElementById('back10').addEventListener('click',()=>seek(-10)); document.getElementById('fwd10').addEventListener('click',()=>seek(10)); document.getElementById('togglePlay').addEventListener('click',()=>{ if(vjsPlayer.paused()) vjsPlayer.play(); else vjsPlayer.pause(); }); document.getElementById('fullscreenBtn').addEventListener('click',()=>{ const shell=document.querySelector('.player-shell'); shell.classList.toggle('pseudo-fullscreen'); if(vjsPlayer){ setTimeout(()=>{ vjsPlayer.trigger('resize'); },100); } }); document.getElementById('customCastBtn').addEventListener('click',()=>{ try{ castCurrentMedia(); }catch(err){ showToast('Chromecast bloqueado por entorno seguro',true); } }); vjsPlayer.on('play',()=>setStatus('REPRODUCIENDO')); vjsPlayer.on('pause',()=>setStatus('PAUSADO')); vjsPlayer.on('seeked',()=>setStatus('SALTANDO...')); vjsPlayer.on('ratechange',()=>setStatus('VELOCIDAD: '+vjsPlayer.playbackRate()+'x')); vjsPlayer.on('ended',()=>{ setStatus('FINALIZADO'); if(autoplayEnabled) nextMedia(); }); vjsPlayer.ready(()=>{ setStatus('LISTO'); if(autoplayEnabled) vjsPlayer.play(); }); } const autoplayControls=document.getElementById('autoplay-controls'); if(viewingPlaylistId){ autoplayControls.classList.remove('hidden'); autoplayControls.classList.add('flex'); updateAutoplayButton(); } else { autoplayControls.classList.add('hidden'); autoplayControls.classList.remove('flex'); } }
-function closeLightbox() {
+function updateLightboxContent(media) {
+  const title = document.getElementById('lightbox-title');
+  const imageWrap = document.getElementById('lightbox-image-wrap');
+  const videoWrap = document.getElementById('lightbox-video-wrap');
+  const img = document.getElementById('lightbox-image');
+  const video = document.getElementById('lightbox-video');
+  const videoSource = document.getElementById('lightbox-video-source');
+
+  if (title) title.textContent = media?.name || '';
+
+  if (media?.type === 'video') {
+    if (imageWrap) imageWrap.classList.add('hidden');
+    if (videoWrap) videoWrap.classList.remove('hidden');
+
+    if (img) img.removeAttribute('src');
+
+    if (video && videoSource) {
+      video.pause();
+      videoSource.src = media.downloadUrl || `https://drive.google.com/uc?export=download&id=${media.id}`;
+      video.poster = media.thumbnail || `https://drive.google.com/thumbnail?id=${media.id}&sz=w1200`;
+      video.load();
+    }
+  } else {
+    if (videoWrap) videoWrap.classList.add('hidden');
+    if (imageWrap) imageWrap.classList.remove('hidden');
+
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      if (videoSource) videoSource.src = '';
+      video.load();
+    }
+
+    if (img) {
+      img.src = media?.url || media?.thumbnail || '';
+      img.alt = media?.name || '';
+    }
+  }
+}function closeLightbox() {
   const lightbox = document.getElementById('lightbox');
   const video = document.getElementById('lightbox-video');
   const videoSource = document.getElementById('lightbox-video-source');
