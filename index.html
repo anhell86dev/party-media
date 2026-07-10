@@ -477,6 +477,328 @@
             if (!response.ok) throw new Error('Error al conectar con Google Drive');
             const data = await response.json(); return data.files;
         }
+        const SHEETS_API_URL = GAS_URL;
+let sheetsCache = { media: [], playlists: [], playlist_items: [], tags: [], settings: [] };
+let sheetsLastSync = 0;
+let tagSearchQuery = '';
+let selectedTagFilter = '';
+let editingTagsMedia = null;
+
+async function sheetsGet(action = 'all') {
+  const url = new URL(SHEETS_API_URL);
+  url.searchParams.set('action', action);
+  const res = await fetch(url.toString(), { method: 'GET' });
+  if (!res.ok) throw new Error(`Sheets GET ${res.status}`);
+  return await res.json();
+}
+
+async function sheetsPost(payload) {
+  const res = await fetch(SHEETS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`Sheets POST ${res.status}`);
+  return await res.json();
+}
+
+function normalizeRowText(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).trim();
+}
+
+function parseTagsValue(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(normalizeRowText).filter(Boolean);
+  return String(v).split(',').map(s => s.trim()).filter(Boolean);
+}
+        function playlistRowToObject(r) {
+  return {
+    id: normalizeRowText(r.playlistId),
+    name: normalizeRowText(r.name),
+    description: normalizeRowText(r.description),
+    coverMediaId: normalizeRowText(r.coverMediaId),
+    createdAt: normalizeRowText(r.createdAt),
+    updatedAt: normalizeRowText(r.updatedAt),
+    itemCount: r.itemCount === '' || r.itemCount === null || r.itemCount === undefined ? 0 : parseInt(r.itemCount, 10)
+  };
+}
+
+function getMediaTags(mediaId) {
+  return (sheetsCache.tags || [])
+    .filter(r => normalizeRowText(r.mediaId) === normalizeRowText(mediaId))
+    .map(r => normalizeRowText(r.tag))
+    .filter(Boolean);
+}
+
+function buildMediaFromRef(ref) {
+  const tags = ref.tags && ref.tags.length ? ref.tags : getMediaTags(ref.id);
+  return {
+    id: ref.id,
+    type: ref.type,
+    mimeType: ref.mimeType,
+    name: ref.name,
+    durationMs: ref.durationMs || null,
+    thumbnail: ref.thumbnail || `https://drive.google.com/thumbnail?id=${ref.id}&sz=w600`,
+    url: ref.url || `https://drive.google.com/uc?id=${ref.id}`,
+    previewUrl: ref.previewUrl || `https://drive.google.com/file/d/${ref.id}/preview`,
+    downloadUrl: ref.downloadUrl || `https://www.googleapis.com/drive/v3/files/${ref.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`,
+    tags
+  };
+}
+
+function syncLocalPlaylistsFromSheets() {
+  const playlistMap = {};
+  const mediaMap = new Map((sheetsCache.media || []).map(m => [normalizeRowText(m.mediaId), m]));
+  const itemsByPlaylist = {};
+
+  (sheetsCache.playlist_items || []).forEach(r => {
+    const pid = normalizeRowText(r.playlistId);
+    if (!pid) return;
+    if (!itemsByPlaylist[pid]) itemsByPlaylist[pid] = [];
+    itemsByPlaylist[pid].push({
+      id: normalizeRowText(r.mediaId),
+      position: r.position === '' || r.position === null || r.position === undefined ? 0 : parseInt(r.position, 10),
+      addedAt: normalizeRowText(r.addedAt),
+      addedBy: normalizeRowText(r.addedBy)
+    });
+  });
+
+  (sheetsCache.playlists || []).forEach(r => {
+    const pl = playlistRowToObject(r);
+    playlistMap[pl.id] = {
+      id: pl.id,
+      name: pl.name,
+      description: pl.description,
+      coverMediaId: pl.coverMediaId,
+      createdAt: pl.createdAt,
+      updatedAt: pl.updatedAt,
+      items: (itemsByPlaylist[pl.id] || []).sort((a,b) => a.position - b.position).map(x => {
+        const m = mediaMap.get(x.id) || {};
+        return {
+          id: x.id,
+          type: normalizeRowText(m.type) || 'image',
+          mimeType: normalizeRowText(m.mimeType),
+          name: normalizeRowText(m.name) || x.id,
+          durationMs: m.durationMs || null,
+          tags: parseTagsValue(m.tags),
+          addedAt: x.addedAt,
+          addedBy: x.addedBy
+        };
+      })
+    };
+  });
+
+  playlists = playlistMap;
+}
+
+async function loadSheetsData() {
+  const data = await sheetsGet('all');
+  sheetsCache.media = data.media || [];
+  sheetsCache.playlists = data.playlists || [];
+  sheetsCache.playlist_items = data.playlist_items || [];
+  sheetsCache.tags = data.tags || [];
+  sheetsCache.settings = data.settings || [];
+  sheetsLastSync = Date.now();
+  syncLocalPlaylistsFromSheets();
+  return sheetsCache;
+}
+
+async function refreshSheetsData() {
+  return await loadSheetsData();
+}
+        async function savePlaylistToSheets(playlistId) {
+  const pl = playlists[playlistId];
+  if (!pl) return;
+  const row = {
+    playlistId: pl.id,
+    name: pl.name,
+    description: pl.description || '',
+    coverMediaId: pl.coverMediaId || '',
+    createdAt: pl.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    itemCount: (pl.items || []).length
+  };
+  await sheetsPost({ action: 'upsertPlaylist', row });
+  await sheetsPost({ action: 'replacePlaylistItems', rows: (pl.items || []).map((m, idx) => ({
+    playlistId: pl.id,
+    mediaId: m.id,
+    position: idx + 1,
+    addedAt: m.addedAt || new Date().toISOString(),
+    addedBy: currentUserEmail || ''
+  }))});
+  await refreshSheetsData();
+}
+
+async function saveTagsForMedia(mediaId, tags) {
+  const clean = (tags || []).map(t => String(t).trim()).filter(Boolean);
+  const rows = clean.map(tag => ({ mediaId, tag, tagType: 'manual', createdAt: new Date().toISOString() }));
+  await sheetsPost({ action: 'replaceTags', rows });
+  await refreshSheetsData();
+}
+
+async function loadPlaylists() {
+  try {
+    await loadSheetsData();
+    return playlists;
+  } catch (e) {
+    console.error(e);
+    playlists = {};
+    return playlists;
+  }
+}
+
+async function savePlaylists() {
+  const ids = Object.keys(playlists || {});
+  for (const id of ids) {
+    await savePlaylistToSheets(id);
+  }
+}
+        function mediaMatchesTagSearch(media) {
+  if (!tagSearchQuery) return true;
+  const textParts = [media.name || '', media.type || '', ...(media.tags || [])].join(' ').toLowerCase();
+  return textParts.includes(tagSearchQuery);
+}
+
+function setTagSearchQuery(value) {
+  tagSearchQuery = String(value || '').trim().toLowerCase();
+  renderGrid();
+}
+
+function toggleTagFilter(tag) {
+  const clean = String(tag || '').trim().toLowerCase();
+  selectedTagFilter = selectedTagFilter === clean ? '' : clean;
+  const input = document.getElementById('tag-search-input');
+  if (input) input.value = selectedTagFilter;
+  tagSearchQuery = selectedTagFilter;
+  renderGrid();
+}
+
+function getTopTags(limit = 12) {
+  const counts = {};
+  (currentFiles || []).forEach(m => {
+    (m.tags || []).forEach(tag => {
+      const t = String(tag || '').trim().toLowerCase();
+      if (!t) return;
+      counts[t] = (counts[t] || 0) + 1;
+    });
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([tag, count]) => ({ tag, count }));
+}
+
+function renderTagChips() {
+  const container = document.getElementById('tag-chips');
+  if (!container) return;
+  const tags = getTopTags();
+  if (!tags.length) {
+    container.innerHTML = '';
+    container.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+  container.innerHTML = tags.map(({ tag, count }) => `
+    <button type="button" class="tag-chip px-3 py-1 rounded-full border border-gray-600 text-xs uppercase tracking-widest ${selectedTagFilter === tag ? 'bg-red-600 text-white' : 'bg-black text-gray-300'}" data-tag="${tag.replace(/"/g, '&quot;')}">
+      ${tag} <span class="opacity-70">(${count})</span>
+    </button>
+  `).join('');
+  container.querySelectorAll('.tag-chip').forEach(btn => {
+    btn.addEventListener('click', () => toggleTagFilter(btn.dataset.tag));
+  });
+}
+        function openEditTagsModal(media) {
+  editingTagsMedia = media;
+  const modal = document.getElementById('edit-tags-modal');
+  const input = document.getElementById('edit-tags-input');
+  const title = document.getElementById('edit-tags-title');
+  if (!modal || !input) return;
+  if (title) title.textContent = `EDITAR TAGS: ${media.name}`;
+  input.value = (media.tags || []).join(', ');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => input.focus(), 100);
+}
+
+function closeEditTagsModal() {
+  const modal = document.getElementById('edit-tags-modal');
+  const input = document.getElementById('edit-tags-input');
+  editingTagsMedia = null;
+  if (input) input.value = '';
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+
+async function saveTagsFromModal() {
+  if (!editingTagsMedia) return;
+  const input = document.getElementById('edit-tags-input');
+  if (!input) return;
+  const tags = input.value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+  editingTagsMedia.tags = tags;
+  await saveTagsForMedia(editingTagsMedia.id, tags);
+  closeEditTagsModal();
+  showToast('TAGS GUARDADOS');
+}
+        async function grantAccess(email, showWelcomeToast) {
+  currentUserEmail = email;
+  setLoginStatus('');
+  setLoginError('');
+  document.getElementById('login-screen').classList.remove('flex');
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-shell').classList.remove('hidden');
+  document.getElementById('app-shell').classList.add('flex');
+  document.getElementById('account-email').textContent = email.split('@')[0];
+  await loadPlaylists();
+  await initApp();
+  if (showWelcomeToast) showToast('ACCESO CONCEDIDO');
+}
+
+async function submitCreatePlaylist() {
+  const input = document.getElementById('prompt-playlist-name');
+  if (!input) return;
+  const name = input.value.trim();
+  if (name !== '') {
+    const id = 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    playlists[id] = {
+      id,
+      name,
+      description: '',
+      coverMediaId: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: []
+    };
+    await savePlaylistToSheets(id);
+    showPlaylistsView();
+    showToast(`PLAYLIST "${name.toUpperCase()}" CREADA`);
+    closeCreatePlaylistModal();
+  } else {
+    showToast('Requiere Nombre', true);
+  }
+}
+
+async function addSelectionToPlaylist(playlistId) {
+  const pl = playlists[playlistId];
+  if (!pl) return;
+  if (!pl.items) pl.items = [];
+  const refs = getSelectedMediaRefs();
+  const existingIds = new Set(pl.items.map(i => i.id));
+  let added = 0;
+  refs.forEach(ref => {
+    if (!existingIds.has(ref.id)) {
+      pl.items.push({ ...ref, addedAt: new Date().toISOString() });
+      existingIds.add(ref.id);
+      added++;
+    }
+  });
+  await savePlaylistToSheets(playlistId);
+  closeAddToPlaylistModal();
+  exitSelectionMode();
+  showToast(added > 0 ? `${added} ITEM${added===1?'':'S'} VINCULADO${added===1?'':'S'}` : 'YA VINCULADOS');
+}
 
         window['__onGCastApiAvailable'] = function(isAvailable) {
             if (isAvailable) {
@@ -945,12 +1267,14 @@
 
         function renderGrid() {
             const gridContainer = document.getElementById('gallery-grid'); const emptyState = document.getElementById('empty-state'); gridContainer.innerHTML = '';
-            let displayFolders = currentFilter === 'all' ? currentFolders : []; let displayFiles = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+            let displayFolders = currentFilter === 'all' ? currentFolders : []; let displayFiles = (currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter))
+  .filter(mediaMatchesTagSearch);
             if (displayFolders.length === 0 && displayFiles.length === 0) { 
                 gridContainer.classList.add('hidden'); emptyState.classList.remove('hidden'); 
                 document.getElementById('empty-title').textContent = "CARPETA VACÍA";
                 document.getElementById('empty-subtitle').textContent = "No hay archivos compatibles aquí.";
                 emptyState.querySelector('i').className = "fa-solid fa-box-open text-2xl";
+                renderTagChips();
                 return; 
             }
             gridContainer.classList.remove('hidden'); emptyState.classList.add('hidden'); gridContainer.className = 'gap-6 relative z-10'; 
