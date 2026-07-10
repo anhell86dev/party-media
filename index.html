@@ -800,10 +800,14 @@ async function addSelectionToPlaylist(playlistId) {
             }
         };
 
+        let activeCastSession = null;
+        let activeCastMedia = null;
+
         function updateCastButtonState(sessionState) {
             const btn = document.getElementById('lightbox-cast-btn'); if (!btn) return;
             const connected = sessionState === 'SESSION_STARTED' || sessionState === 'SESSION_RESUMED';
             btn.classList.toggle('text-pride-red', connected); btn.title = connected ? 'Conectado — enviar a TV' : 'Enviar a TV';
+            if (sessionState === 'SESSION_ENDED' || sessionState === 'NO_SESSION') { activeCastSession = null; activeCastMedia = null; }
         }
 
         function showToast(message, isError = false) {
@@ -821,12 +825,30 @@ async function addSelectionToPlaylist(playlistId) {
 
         function castMediaToTV(media, session) {
             const mimeType = media.mimeType || (media.type === 'video' ? 'video/mp4' : 'image/jpeg');
-            const castUrl = media.type === 'video' ? media.downloadUrl : media.url;
+            const castUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
             const mediaInfo = new chrome.cast.media.MediaInfo(castUrl, mimeType);
             const metadata = new chrome.cast.media.GenericMediaMetadata();
             metadata.title = media.name; metadata.images = [{ url: media.thumbnail }]; mediaInfo.metadata = metadata;
             const request = new chrome.cast.media.LoadRequest(mediaInfo);
-            session.loadMedia(request).then(() => showToast(`En TV: "${media.name}"`), (err) => { console.error('Error Cast:', err); showToast('Fallo al conectar con TV', true); });
+            session.loadMedia(request).then(() => {
+                activeCastSession = session; activeCastMedia = media;
+                showToast(`En TV: "${media.name}"`);
+            }, (err) => { console.error('Error Cast:', err); showToast('Fallo al conectar con TV', true); });
+        }
+
+        function refreshActiveCastPlayback() {
+            if (!activeCastSession || !activeCastMedia || !accessToken) return;
+            const mediaSession = typeof activeCastSession.getMediaSession === 'function' ? activeCastSession.getMediaSession() : null;
+            const resumeTime = mediaSession && typeof mediaSession.getEstimatedTime === 'function' ? mediaSession.getEstimatedTime() : 0;
+            const mimeType = activeCastMedia.mimeType || (activeCastMedia.type === 'video' ? 'video/mp4' : 'image/jpeg');
+            const castUrl = `https://www.googleapis.com/drive/v3/files/${activeCastMedia.id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
+            const mediaInfo = new chrome.cast.media.MediaInfo(castUrl, mimeType);
+            const metadata = new chrome.cast.media.GenericMediaMetadata();
+            metadata.title = activeCastMedia.name; metadata.images = [{ url: activeCastMedia.thumbnail }]; mediaInfo.metadata = metadata;
+            const request = new chrome.cast.media.LoadRequest(mediaInfo);
+            request.currentTime = resumeTime || 0;
+            request.autoplay = true;
+            activeCastSession.loadMedia(request).catch(err => console.error('Error al renovar cast:', err));
         }
 
         function castCurrentMedia() {
@@ -834,9 +856,11 @@ async function addSelectionToPlaylist(playlistId) {
                 if (!castAvailable) { showToast('Chromecast bloqueado por entorno seguro', true); return; }
                 const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
                 const media = mediaArray[currentLightboxIndex]; if (!media) return;
-                const context = cast.framework.CastContext.getInstance(); const existingSession = context.getCurrentSession();
-                if (existingSession) { castMediaToTV(media, existingSession); return; }
-                context.requestSession().then(() => { const session = context.getCurrentSession(); if (session) castMediaToTV(media, session); }, (err) => { if (err !== chrome.cast.ErrorCode.CANCEL) showToast('Error al vincular dispositivo', true); });
+                ensureDriveAuth(() => {
+                    const context = cast.framework.CastContext.getInstance(); const existingSession = context.getCurrentSession();
+                    if (existingSession) { castMediaToTV(media, existingSession); return; }
+                    context.requestSession().then(() => { const session = context.getCurrentSession(); if (session) castMediaToTV(media, session); }, (err) => { if (err !== chrome.cast.ErrorCode.CANCEL) showToast('Error al vincular dispositivo', true); });
+                });
             } catch (e) { showToast('Chromecast bloqueado por entorno seguro', true); }
         }
 
@@ -915,7 +939,8 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         function logout() {
-            localStorage.removeItem(AUTH_STORAGE_KEY); currentUserEmail = null; accessToken = null; 
+            localStorage.removeItem(AUTH_STORAGE_KEY); currentUserEmail = null; accessToken = null; accessTokenExpiresAt = null;
+            if (tokenRefreshTimer) { clearTimeout(tokenRefreshTimer); tokenRefreshTimer = null; }
             document.getElementById('app-shell').classList.add('hidden'); document.getElementById('app-shell').classList.remove('flex');
             document.getElementById('login-screen').classList.remove('hidden'); document.getElementById('login-screen').classList.add('flex'); resetLoginForm();
         }
@@ -928,16 +953,34 @@ async function addSelectionToPlaylist(playlistId) {
 
         // --- PERMISO GOOGLE DRIVE ---
         let tokenClient = null; let accessToken = null; let pendingAuthAction = null;
+        let accessTokenExpiresAt = null; let tokenRefreshTimer = null;
+
+        function scheduleTokenRefresh() {
+            if (tokenRefreshTimer) { clearTimeout(tokenRefreshTimer); tokenRefreshTimer = null; }
+            if (!accessTokenExpiresAt) return;
+            const msUntilRefresh = Math.max(5000, (accessTokenExpiresAt - Date.now()) - 60000);
+            tokenRefreshTimer = setTimeout(() => {
+                if (tokenClient) tokenClient.requestAccessToken({ prompt: '' });
+            }, msUntilRefresh);
+        }
+
         function initGoogleAuth() {
             if (typeof google === 'undefined' || !google.accounts) { setTimeout(initGoogleAuth, 300); return; }
             if (DRIVE_CONFIG.oauthClientId.startsWith('TU_CLIENT_ID')) return;
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: DRIVE_CONFIG.oauthClientId, scope: 'https://www.googleapis.com/auth/drive',
-                callback: (response) => { if (response.error) { showToast('Fallo de Autorización', true); return; } accessToken = response.access_token; if (pendingAuthAction) { const fn = pendingAuthAction; pendingAuthAction = null; fn(); } }
+                callback: (response) => {
+                    if (response.error) { showToast('Fallo de Autorización', true); return; }
+                    accessToken = response.access_token;
+                    accessTokenExpiresAt = Date.now() + (parseInt(response.expires_in, 10) || 3600) * 1000;
+                    scheduleTokenRefresh();
+                    refreshActiveCastPlayback();
+                    if (pendingAuthAction) { const fn = pendingAuthAction; pendingAuthAction = null; fn(); }
+                }
             });
         }
         function ensureDriveAuth(action) { if (accessToken) { action(); return; } if (!tokenClient) { showToast('Módulo no listo, reintenta', true); return; } pendingAuthAction = action; tokenClient.requestAccessToken({ prompt: '' }); }
-        function handleAuthExpired() { accessToken = null; showToast('Sesión caducada, reintenta', true); }
+        function handleAuthExpired() { accessToken = null; accessTokenExpiresAt = null; if (tokenRefreshTimer) { clearTimeout(tokenRefreshTimer); tokenRefreshTimer = null; } showToast('Sesión caducada, reintenta', true); }
 
         function requestDriveAccessOnLogin(retries = 20) {
             if (accessToken) return;
@@ -1380,16 +1423,6 @@ async function addSelectionToPlaylist(playlistId) {
                                     <div class="vjs-title truncate">${media.name}</div>
                                     <div class="vjs-meta">HTML5 + Video.js</div>
                                 </div>
-                                <div class="actions">
-                                    <button class="vjs-btn cursor-pointer select-none" id="back10" disabled><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button>
-                                    <button class="vjs-btn primary cursor-pointer select-none" id="togglePlay" disabled><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button>
-                                    <button class="vjs-btn cursor-pointer select-none" id="fwd10" disabled>10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
-                                    <button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button>
-                                    <button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button>
-                                    <button class="px-2 py-1 text-xs border border-gray-600 rounded" onclick="openEditTagsModal(buildMediaFromRef({ id: '${media.id}', type: '${media.type}', name: '${media.name}', mimeType: '${media.mimeType}', tags: ${JSON.stringify(media.tags || [])} }))">
-  EDITAR TAGS
-</button>
-                                </div>
                             </div>
 
                             <div class="video-wrap">
@@ -1405,7 +1438,16 @@ async function addSelectionToPlaylist(playlistId) {
 
                             <div class="footerbar">
                                 <div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">CARGANDO...</div>
-        
+                                <div class="actions">
+                                    <button class="vjs-btn cursor-pointer select-none" id="back10" disabled><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button>
+                                    <button class="vjs-btn primary cursor-pointer select-none" id="togglePlay" disabled><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="fwd10" disabled>10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button>
+                                    <button class="px-2 py-1 text-xs border border-gray-600 rounded" onclick="openEditTagsModal(buildMediaFromRef({ id: '${media.id}', type: '${media.type}', name: '${media.name}', mimeType: '${media.mimeType}', tags: ${JSON.stringify(media.tags || [])} }))">
+  EDITAR TAGS
+</button>
+                                </div>
                             </div>
                         </div>
                     </div>
