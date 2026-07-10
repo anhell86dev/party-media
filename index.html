@@ -347,25 +347,33 @@
     </div>
 
     <!-- LIGHTBOX (CONTENEDOR GLOBAL) -->
-    <div id="lightbox" class="hidden fixed inset-0 z-[250] bg-black/95 items-center justify-center">
-  <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white z-10">Cerrar</button>
-
-  <div class="absolute top-4 left-4 text-white z-10">
-    <div id="lightbox-title" class="text-lg font-bold"></div>
-  </div>
-
-  <div id="lightbox-image-wrap" class="max-w-full max-h-full flex items-center justify-center">
-    <img id="lightbox-image" class="max-w-full max-h-[90vh] object-contain" alt="Preview">
-  </div>
-
-  <div id="lightbox-video-wrap" class="hidden w-full max-w-5xl px-4">
-    <video id="lightbox-video" controls playsinline preload="metadata" class="w-full max-h-[90vh] bg-black">
-      <source id="lightbox-video-source" src="" type="video/mp4">
-      Tu navegador no puede reproducir este video.
-    </video>
-  </div>
-</div>
-
+ - <div id="lightbox" class="hidden">
+-   <div id="lightboxTitle"></div>
+-   <div id="lightboxContent">
+-     <img id="lightboxImage">
+-     <video id="lightboxVideo" controls>
+-       <source id="lightboxVideoSource" src="" type="video/mp4">
+-     </video>
+-   </div>
+- </div>
++ <div id="lightbox" class="hidden fixed inset-0 z-[250] bg-black/95 items-center justify-center">
++   <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white z-10">Cerrar</button>
++
++   <div class="absolute top-4 left-4 text-white z-10">
++     <div id="lightbox-title" class="text-lg font-bold"></div>
++   </div>
++
++   <div id="lightbox-image-wrap" class="max-w-full max-h-full flex items-center justify-center">
++     <img id="lightbox-image" class="max-w-full max-h-[90vh] object-contain" alt="Preview">
++   </div>
++
++   <div id="lightbox-video-wrap" class="hidden w-full max-w-5xl px-4">
++     <video id="lightbox-video" controls playsinline preload="metadata" class="w-full max-h-[90vh] bg-black">
++       <source id="lightbox-video-source" src="" type="video/mp4">
++       Tu navegador no puede reproducir este video.
++     </video>
++   </div>
++ </div>
     <!-- MODAL CONFIRMAR ELIMINACIÓN GENERAL -->
     <div id="confirm-modal" class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-leather-800 metallic-edge rounded-sm max-w-sm w-full p-8 shadow-2xl fade-in relative">
