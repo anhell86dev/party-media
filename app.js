@@ -185,30 +185,32 @@ function openLightbox(index) {
 +     }
 +   }
 + }
-  function closeLightbox() {
-  const lightbox = document.getElementById('lightbox');
-  const video = document.getElementById('lightbox-video');
-  const videoSource = document.getElementById('lightbox-video-source');
-  const imageWrap = document.getElementById('lightbox-image-wrap');
-  const videoWrap = document.getElementById('lightbox-video-wrap');
-
-  clearAutoplayTimer();
-
-  if (video) {
-    video.pause();
-    video.removeAttribute('src');
-    if (videoSource) videoSource.src = '';
-    video.load();
-  }
-
-  if (imageWrap) imageWrap.classList.remove('hidden');
-  if (videoWrap) videoWrap.classList.add('hidden');
-
-  if (lightbox) {
-    lightbox.classList.add('hidden');
-    lightbox.classList.remove('flex');
-  }
-}function nextMedia() {
+  - function closeLightbox() {
+-   document.getElementById('lightbox').classList.add('hidden');
+- }
++ function closeLightbox() {
++   const lightbox = document.getElementById('lightbox');
++   const videoEl = document.getElementById('lightbox-video');
++   const videoSourceEl = document.getElementById('lightbox-video-source');
++   const imageWrapEl = document.getElementById('lightbox-image-wrap');
++   const videoWrapEl = document.getElementById('lightbox-video-wrap');
++
++   if (videoEl) {
++     videoEl.pause();
++     videoEl.removeAttribute('src');
++     if (videoSourceEl) videoSourceEl.src = '';
++     videoEl.load();
++   }
++
++   if (imageWrapEl) imageWrapEl.classList.remove('hidden');
++   if (videoWrapEl) videoWrapEl.classList.add('hidden');
++
++   if (lightbox) {
++     lightbox.classList.add('hidden');
++     lightbox.classList.remove('flex');
++   }
++ }
+  function nextMedia() {
   const mediaArray = currentFilter === 'all'
     ? currentFiles
     : currentFiles.filter(m => m.type === currentFilter);
