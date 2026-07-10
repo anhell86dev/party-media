@@ -130,6 +130,8 @@ function openLightbox(index) {
 - function updateLightboxContent(mediaArray) {
 -   const media = mediaArray[currentLightboxIndex];
 -   const contentContainer = document.getElementById('lightbox-content');
+if (!contentContainer) return;
+contentContainer.replaceChildren();
 -   document.getElementById('lightbox-title').textContent = media.name;
 -
 -   if (vjsPlayer) {
