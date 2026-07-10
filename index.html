@@ -1320,7 +1320,7 @@ async function addSelectionToPlaylist(playlistId) {
             if (currentVideoBlobUrl) { URL.revokeObjectURL(currentVideoBlobUrl); currentVideoBlobUrl = null; }
         }
 
-        function loadVideoSource(media, setStatus) {
+        function loadVideoSource(media, setStatus, onReady) {
             const apply = () => {
                 setStatus('CARGANDO...');
                 const apiUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&acknowledgeAbuse=true`;
@@ -1336,12 +1336,13 @@ async function addSelectionToPlaylist(playlistId) {
                         if (!vjsPlayer) return;
                         vjsPlayer.src({ src: currentVideoBlobUrl, type: media.mimeType || 'video/mp4' });
                         setStatus('LISTO');
+                        if (onReady) onReady();
                         if (autoplayEnabled) { vjsPlayer.play(); }
                     })
                     .catch(err => {
                         if (err.message === 'auth-expired') {
                             setStatus('SESIÓN CADUCADA');
-                            ensureDriveAuth(() => loadVideoSource(media, setStatus));
+                            ensureDriveAuth(() => loadVideoSource(media, setStatus, onReady));
                         } else {
                             setStatus('ERROR AL CARGAR');
                             showToast('No se pudo cargar el video', true);
@@ -1380,9 +1381,9 @@ async function addSelectionToPlaylist(playlistId) {
                                     <div class="vjs-meta">HTML5 + Video.js</div>
                                 </div>
                                 <div class="actions">
-                                    <button class="vjs-btn cursor-pointer select-none" id="back10"><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button>
-                                    <button class="vjs-btn primary cursor-pointer select-none" id="togglePlay"><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button>
-                                    <button class="vjs-btn cursor-pointer select-none" id="fwd10">10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="back10" disabled><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button>
+                                    <button class="vjs-btn primary cursor-pointer select-none" id="togglePlay" disabled><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="fwd10" disabled>10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
                                     <button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button>
                                     <button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button>
                                     <button class="px-2 py-1 text-xs border border-gray-600 rounded" onclick="openEditTagsModal(buildMediaFromRef({ id: '${media.id}', type: '${media.type}', name: '${media.name}', mimeType: '${media.mimeType}', tags: ${JSON.stringify(media.tags || [])} }))">
@@ -1396,10 +1397,14 @@ async function addSelectionToPlaylist(playlistId) {
                                 <video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" poster="${media.thumbnail.replace('=s600', '=s2000')}">
                                     Tu navegador no soporta video HTML5.
                                 </video>
+                                <div id="video-loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-20">
+                                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-pride-red"></i>
+                                    <span class="font-industrial uppercase tracking-widest text-xs text-chrome">Cargando video...</span>
+                                </div>
                             </div>
 
                             <div class="footerbar">
-                                <div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">LISTO</div>
+                                <div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">CARGANDO...</div>
         
                             </div>
                         </div>
@@ -1414,11 +1419,21 @@ async function addSelectionToPlaylist(playlistId) {
                 const setStatus = (txt) => { if(statusEl) statusEl.textContent = txt; };
                 const seek = (seconds) => { const t = Math.max(0, vjsPlayer.currentTime() + seconds); vjsPlayer.currentTime(t); };
 
-                loadVideoSource(media, setStatus);
+                const loadingOverlay = document.getElementById('video-loading-overlay');
+                const back10Btn = document.getElementById('back10');
+                const fwd10Btn = document.getElementById('fwd10');
+                const togglePlayBtn = document.getElementById('togglePlay');
+                const enablePlaybackControls = () => {
+                    if (loadingOverlay) loadingOverlay.remove();
+                    [back10Btn, fwd10Btn, togglePlayBtn].forEach(btn => { if (btn) { btn.disabled = false; btn.classList.remove('opacity-40', 'cursor-not-allowed'); } });
+                };
+                [back10Btn, fwd10Btn, togglePlayBtn].forEach(btn => { if (btn) btn.classList.add('opacity-40', 'cursor-not-allowed'); });
 
-                document.getElementById('back10').addEventListener('click', () => seek(-10));
-                document.getElementById('fwd10').addEventListener('click', () => seek(10));
-                document.getElementById('togglePlay').addEventListener('click', () => { if (vjsPlayer.paused()) vjsPlayer.play(); else vjsPlayer.pause(); });
+                loadVideoSource(media, setStatus, enablePlaybackControls);
+
+                back10Btn.addEventListener('click', () => seek(-10));
+                fwd10Btn.addEventListener('click', () => seek(10));
+                togglePlayBtn.addEventListener('click', () => { if (vjsPlayer.paused()) vjsPlayer.play(); else vjsPlayer.pause(); });
                 
                 document.getElementById('fullscreenBtn').addEventListener('click', () => {
                     const shell = document.querySelector('.player-shell');
@@ -1435,8 +1450,6 @@ async function addSelectionToPlaylist(playlistId) {
                 vjsPlayer.on('seeked', () => setStatus('SALTANDO...'));
                 vjsPlayer.on('ratechange', () => setStatus('VELOCIDAD: ' + vjsPlayer.playbackRate() + 'x'));
                 vjsPlayer.on('ended', () => { setStatus('FINALIZADO'); if (autoplayEnabled) { nextMedia(); } });
-
-                vjsPlayer.ready(() => { setStatus('LISTO'); if(autoplayEnabled) { vjsPlayer.play(); } });
             }
 
             const autoplayControls = document.getElementById('autoplay-controls');
