@@ -127,62 +127,150 @@ function openLightbox(index) {
   lightbox.classList.remove('hidden');
   lightbox.classList.add('flex');
 }
-- function updateLightboxContent(media) {
--   const titleEl = document.getElementById('lightboxTitle');
--   const contentEl = document.getElementById('lightboxContent');
--   const imageEl = document.getElementById('lightboxImage');
--   const videoEl = document.getElementById('lightboxVideo');
--   const videoSourceEl = document.getElementById('lightboxVideoSource');
+- function updateLightboxContent(mediaArray) {
+-   const media = mediaArray[currentLightboxIndex];
+-   const contentContainer = document.getElementById('lightbox-content');
+-   document.getElementById('lightbox-title').textContent = media.name;
 -
--   titleEl.innerHTML = media.name;
+-   if (vjsPlayer) {
+-     vjsPlayer.dispose();
+-     vjsPlayer = null;
+-   }
 -
--   if (media.type === 'video') {
--     imageEl.classList.add('hidden');
--     videoEl.classList.remove('hidden');
--     videoSourceEl.src = media.downloadUrl;
--     videoEl.load();
--   } else {
--     videoEl.classList.add('hidden');
--     imageEl.classList.remove('hidden');
--     imageEl.src = media.url;
+-   contentContainer.innerHTML = `<div id="media-wrapper" class="w-full h-full flex items-center justify-center"></div>`;
+-   const wrapper = document.getElementById('media-wrapper');
+-
+-   if (media.type === 'image') {
+-     const hqImg = media.thumbnail.replace('s600', 's2000');
+-     wrapper.innerHTML = `<img src="${hqImg}" class="max-w-full max-h-85vh object-contain rounded-sm metallic-edge shadow-020px50pxrgba(0,0,0,0.8) fade-in" alt="${media.name}">`;
+-     scheduleAutoAdvance(media);
+-   } else if (media.type === 'video') {
+-     clearAutoplayTimer();
+-     resetProgressBar();
+-     if (autoplayEnabled) {
+-       const bar = document.getElementById('autoplay-progress-bar');
+-       if (bar) bar.style.transition = 'none';
+-       bar.style.width = '100%';
+-     }
+-     wrapper.innerHTML = `...`;
+-     vjsPlayer = videojs('my-video', {...});
 -   }
 - }
-+ function updateLightboxContent(media) {
++ function updateLightboxContent(mediaArray) {
++   const media = mediaArray[currentLightboxIndex];
++   if (!media) return;
++
 +   const titleEl = document.getElementById('lightbox-title');
-+   const imageWrapEl = document.getElementById('lightbox-image-wrap');
-+   const videoWrapEl = document.getElementById('lightbox-video-wrap');
-+   const imageEl = document.getElementById('lightbox-image');
-+   const videoEl = document.getElementById('lightbox-video');
-+   const videoSourceEl = document.getElementById('lightbox-video-source');
++   const contentContainer = document.getElementById('lightbox-content');
++   if (!titleEl || !contentContainer) return;
 +
-+   if (titleEl) titleEl.textContent = media?.name || '';
++   titleEl.textContent = media.name || '';
 +
-+   if (media?.type === 'video') {
-+     if (imageWrapEl) imageWrapEl.classList.add('hidden');
-+     if (videoWrapEl) videoWrapEl.classList.remove('hidden');
-+     if (imageEl) {
-+       imageEl.removeAttribute('src');
-+       imageEl.alt = '';
++   if (vjsPlayer) {
++     vjsPlayer.dispose();
++     vjsPlayer = null;
++   }
++
++   contentContainer.innerHTML = '';
++   const wrapper = document.createElement('div');
++   wrapper.id = 'media-wrapper';
++   wrapper.className = 'w-full h-full flex items-center justify-center';
++   contentContainer.appendChild(wrapper);
++
++   if (media.type === 'image') {
++     const hqImg = (media.thumbnail || '').replace('s600', 's2000');
++     wrapper.innerHTML = `<img src="${hqImg}" class="max-w-full max-h-85vh object-contain rounded-sm metallic-edge shadow-020px50pxrgba(0,0,0,0.8) fade-in" alt="${media.name || ''}">`;
++     scheduleAutoAdvance(media);
++     return;
++   }
++
++   if (media.type === 'video') {
++     clearAutoplayTimer();
++     resetProgressBar();
++
++     const autoplayControls = document.getElementById('autoplay-controls');
++     if (autoplayControls) {
++       if (viewingPlaylistId) autoplayControls.classList.remove('hidden');
++       else autoplayControls.classList.add('hidden');
 +     }
-+     if (videoEl && videoSourceEl) {
-+       videoEl.pause();
-+       videoSourceEl.src = media.downloadUrl || `https://drive.google.com/uc?export=download&id=${media.id}`;
-+       videoEl.poster = media.thumbnail || `https://drive.google.com/thumbnail?id=${media.id}&sz=w1200`;
-+       videoEl.load();
-+     }
-+   } else {
-+     if (videoWrapEl) videoWrapEl.classList.add('hidden');
-+     if (imageWrapEl) imageWrapEl.classList.remove('hidden');
-+     if (videoEl) {
-+       videoEl.pause();
-+       videoEl.removeAttribute('src');
-+       if (videoSourceEl) videoSourceEl.src = '';
-+       videoEl.load();
-+     }
-+     if (imageEl) {
-+       imageEl.src = media?.url || media?.thumbnail || '';
-+       imageEl.alt = media?.name || '';
-+     }
++
++     wrapper.innerHTML = `
++       <div class="w-full max-w-5xl fade-in metallic-edge rounded-sm shadow-020px50pxrgba(0,0,0,0.8) bg-black">
++         <div class="player-shell relative">
++           <div class="topbar">
++             <div class="flex-1 min-w-0 pr-4">
++               <div class="vjs-title truncate">${media.name || ''}</div>
++               <div class="vjs-meta">HTML5 Video.js</div>
++             </div>
++             <div class="actions">
++               <button class="vjs-btn cursor-pointer select-none" id="back10"><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button>
++               <button class="vjs-btn primary cursor-pointer select-none" id="togglePlay"><i class="fa-solid fa-play pointer-events-none"></i> <i class="fa-solid fa-pause pointer-events-none"></i></button>
++               <button class="vjs-btn cursor-pointer select-none" id="fwd10">10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
++               <button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a TV"><i class="fa-brands fa-chromecast pointer-events-none"></i></button>
++               <button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button>
++             </div>
++           </div>
++           <div class="video-wrap">
++             <video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" poster="${media.thumbnail || ''}">
++               <source src="${media.downloadUrl || ''}">
++               <source src="https://drive.google.com/uc?export=download&id=${media.id}">
++               Tu navegador no soporta video HTML5.
++             </video>
++           </div>
++           <div class="footerbar">
++             <div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">LISTO</div>
++             <div class="vjs-small hidden sm:block">Velocidad, volumen y controles incluidos</div>
++           </div>
++         </div>
++       </div>`;
++
++     vjsPlayer = videojs('my-video', {
++       controls: true,
++       fluid: true,
++       playbackRates: [0.5, 1, 1.5, 2, 4],
++       preload: 'auto',
++       responsive: true,
++       aspectRatio: '16:9',
++       controlBar: { pictureInPictureToggle: false }
++     });
++
++     const statusEl = document.getElementById('vjs-status');
++     const setStatus = txt => { if (statusEl) statusEl.textContent = txt; };
++     const seek = seconds => {
++       const t = Math.max(0, vjsPlayer.currentTime() + seconds);
++       vjsPlayer.currentTime(t);
++     };
++
++     const back10 = document.getElementById('back10');
++     const fwd10 = document.getElementById('fwd10');
++     const togglePlay = document.getElementById('togglePlay');
++     const fullscreenBtn = document.getElementById('fullscreenBtn');
++     const customCastBtn = document.getElementById('customCastBtn');
++
++     if (back10) back10.onclick = () => seek(-10);
++     if (fwd10) fwd10.onclick = () => seek(10);
++     if (togglePlay) togglePlay.onclick = () => (vjsPlayer.paused() ? vjsPlayer.play() : vjsPlayer.pause());
++     if (fullscreenBtn) fullscreenBtn.onclick = () => {
++       const shell = document.querySelector('.player-shell');
++       if (shell) shell.classList.toggle('pseudo-fullscreen');
++       if (vjsPlayer) setTimeout(() => vjsPlayer.trigger('resize'), 100);
++     };
++     if (customCastBtn) customCastBtn.onclick = () => {
++       try { castCurrentMedia(); } catch (err) { showToast('Chromecast bloqueado por entorno seguro', true); }
++     };
++
++     vjsPlayer.on('play', () => setStatus('REPRODUCIENDO'));
++     vjsPlayer.on('pause', () => setStatus('PAUSADO'));
++     vjsPlayer.on('seeked', () => setStatus('SALTANDO...'));
++     vjsPlayer.on('ratechange', () => setStatus(`VELOCIDAD ${vjsPlayer.playbackRate()}x`));
++     vjsPlayer.on('ended', () => { setStatus('FINALIZADO'); if (autoplayEnabled) nextMedia(); });
++
++     vjsPlayer.ready(() => {
++       setStatus('LISTO');
++       if (autoplayEnabled) vjsPlayer.play();
++     });
++
++     return;
 +   }
 + }
   - function closeLightbox() {
