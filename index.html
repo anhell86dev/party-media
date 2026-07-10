@@ -1356,6 +1356,9 @@ async function addSelectionToPlaylist(playlistId) {
                                     <button class="vjs-btn cursor-pointer select-none" id="fwd10">10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
                                     <button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button>
                                     <button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button>
+                                    <button class="px-2 py-1 text-xs border border-gray-600 rounded" onclick="openEditTagsModal(buildMediaFromRef({ id: '${media.id}', type: '${media.type}', name: '${media.name}', mimeType: '${media.mimeType}', tags: ${JSON.stringify(media.tags || [])} }))">
+  EDITAR TAGS
+</button>
                                 </div>
                             </div>
 
