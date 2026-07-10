@@ -64,9 +64,103 @@ function renderBreadcrumbs(){ const container=document.getElementById('breadcrum
 function setFilter(type){ currentFilter=type; document.querySelectorAll('.filter-btn').forEach(btn=>{ if(btn.dataset.filter===type) btn.classList.add('bg-leather-700','text-pride-red','metallic-edge'); else btn.classList.remove('bg-leather-700','text-pride-red','metallic-edge'); }); if(isViewingPlaylistRoot) showPlaylistsView(); else renderGrid(); }
 function setViewMode(mode){ currentViewMode=mode; document.querySelectorAll('.view-btn').forEach(btn=>{ if(btn.dataset.view===mode) btn.classList.add('bg-leather-700','text-pride-red','metallic-edge'); else btn.classList.remove('bg-leather-700','text-pride-red','metallic-edge'); }); if(isViewingPlaylistRoot) showPlaylistsView(); else renderGrid(); }
 function renderGrid(){ const gridContainer=document.getElementById('gallery-grid'); const emptyState=document.getElementById('empty-state'); gridContainer.innerHTML=''; const displayFolders=currentFilter==='all'?currentFolders:[]; const displayFiles=currentFilter==='all'?currentFiles:currentFiles.filter(m=>m.type===currentFilter); if(displayFolders.length===0&&displayFiles.length===0){ gridContainer.classList.add('hidden'); emptyState.classList.remove('hidden'); document.getElementById('empty-title').textContent='CARPETA VACÍA'; document.getElementById('empty-subtitle').textContent='No hay archivos compatibles aquí.'; emptyState.querySelector('i').className='fa-solid fa-box-open text-2xl'; return; } gridContainer.classList.remove('hidden'); emptyState.classList.add('hidden'); gridContainer.className='gap-6 relative z-10'; if(currentViewMode==='list') gridContainer.classList.add('flex','flex-col'); else gridContainer.classList.add('grid'); if(currentViewMode==='small') gridContainer.classList.add('grid-cols-3','sm:grid-cols-4','md:grid-cols-5','lg:grid-cols-6','xl:grid-cols-8'); else if(currentViewMode==='medium') gridContainer.classList.add('grid-cols-2','sm:grid-cols-3','lg:grid-cols-4','xl:grid-cols-5'); else if(currentViewMode==='large') gridContainer.classList.add('grid-cols-1','sm:grid-cols-2','lg:grid-cols-2','xl:grid-cols-3'); displayFolders.forEach(folder=>{ if(currentViewMode==='list'){ gridContainer.innerHTML+=`<div class="group flex items-center bg-leather-900 metallic-edge hover:border-chrome rounded-sm p-4 cursor-pointer select-none transition-all fade-in" onclick="openFolder('${folder.id}', '${folder.name.replace(/'/g, "\'")}')"><div class="w-12 h-12 flex-shrink-0 bg-leather-800 metallic-edge rounded-sm flex items-center justify-center mr-4"><i class="fa-solid fa-folder text-2xl text-chrome group-hover:text-pride-red transition-colors"></i></div><span class="text-chrome font-industrial uppercase tracking-widest text-lg group-hover:text-white">${folder.name}</span></div>`; } else { const iconSize=currentViewMode==='small'?'text-3xl':currentViewMode==='large'?'text-7xl':'text-5xl'; gridContainer.innerHTML+=`<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none fade-in transition-all duration-300 hover:border-pride-red hover:-translate-y-1 shadow-lg" onclick="openFolder('${folder.id}', '${folder.name.replace(/'/g, "\'")}')"><div class="aspect-square flex flex-col items-center justify-center p-4"><i class="fa-solid fa-folder ${iconSize} text-chrome group-hover:text-pride-red transition-colors mb-4 pointer-events-none"></i><span class="text-chrome font-industrial uppercase tracking-wider text-center text-sm truncate w-full px-2 group-hover:text-white pointer-events-none">${folder.name}</span></div></div>`; } }); displayFiles.forEach((media,index)=>{ const isVideo=media.type==='video'; const isSelected=selectedIds.has(media.id); const clickAction=selectionMode?`toggleSelectItem('${media.id}')`:`openLightbox(${index})`; if(currentViewMode==='list'){ const typeIcon=isVideo?'<i class="fa-solid fa-video text-xs text-white"></i>':'<i class="fa-solid fa-image text-xs text-white"></i>'; const checkboxHtml=selectionMode?`<div class="w-6 h-6 rounded-sm metallic-edge flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isSelected?'bg-pride-red':'bg-leather-800'}">${isSelected?'<i class="fa-solid fa-check text-white text-10px"></i>':''}</div>`:''; const actionBtnHtml=selectionMode?(viewingPlaylistId?`<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>`:`<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`):''; gridContainer.innerHTML+=`<div class="group flex items-center bg-leather-900 metallic-edge ${isSelected?'border-pride-red shadow-[0_0_10px_rgba(229,0,0,0.2)]':'hover:border-chrome'} rounded-sm p-3 cursor-pointer select-none transition-all fade-in" onclick="${clickAction}">${checkboxHtml}<div class="w-20 h-14 flex-shrink-0 relative rounded-sm metallic-edge overflow-hidden mr-5 bg-leather-800"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy"><div class="absolute inset-0 flex items-center justify-center bg-black/60 group-hover:bg-black/20 transition-colors pointer-events-none">${typeIcon}</div></div><span class="text-chrome font-medium group-hover:text-white truncate flex-1 tracking-wide pointer-events-none">${media.name}</span>${actionBtnHtml}</div>`; } else { const playIconSize=currentViewMode==='small'?'w-8 h-8 text-sm':currentViewMode==='large'?'w-16 h-16 text-2xl':'w-12 h-12 text-lg'; const iconHtml=isVideo?`<div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="${playIconSize} bg-leather-900/80 metallic-edge rounded-sm flex items-center justify-center text-chrome backdrop-blur-sm group-hover:bg-pride-red group-hover:text-white group-hover:scale-110 transition-all shadow-xl"><i class="fa-solid fa-play ml-1"></i></div></div>`:''; const checkboxHtml=selectionMode?`<div class="absolute top-3 left-3 w-8 h-8 rounded-sm metallic-edge flex items-center justify-center z-10 transition-colors ${isSelected?'bg-pride-red':'bg-black/60'} pointer-events-none">${isSelected?'<i class="fa-solid fa-check text-white text-sm"></i>':''}</div>`:''; const actionBtnHtml=selectionMode?(viewingPlaylistId?`<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>`:`<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`):''; gridContainer.innerHTML+=`<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none fade-in transition-all duration-300 hover:-translate-y-1 hover:border-chrome hover:shadow-2xl ${isSelected?'border-pride-red shadow-[0_0_15px_rgba(229,0,0,0.3)]':'shadow-black'}" onclick="${clickAction}"><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100 pointer-events-none" loading="lazy">${checkboxHtml}${iconHtml}${actionBtnHtml}<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none"><p class="text-white text-xs font-medium truncate tracking-wide">${media.name}</p></div></div></div>`; } }); }
-function openLightbox(index){ currentLightboxIndex=index; const mediaArray=currentFilter==='all'?currentFiles:currentFiles.filter(m=>m.type===currentFilter); const lightbox=document.getElementById('lightbox'); updateLightboxContent(mediaArray); lightbox.classList.remove('hidden'); setTimeout(()=>lightbox.classList.remove('opacity-0'),10); document.body.style.overflow='hidden'; }
+function openLightbox(index) {
+  const mediaArray = currentFilter === 'all'
+    ? currentFiles
+    : currentFiles.filter(m => m.type === currentFilter);
+
+  const media = mediaArray[index];
+  if (!media) return;
+
+  currentLightboxIndex = index;
+  const lightbox = document.getElementById('lightbox');
+  const title = document.getElementById('lightbox-title');
+  const imageWrap = document.getElementById('lightbox-image-wrap');
+  const videoWrap = document.getElementById('lightbox-video-wrap');
+  const img = document.getElementById('lightbox-image');
+  const video = document.getElementById('lightbox-video');
+  const videoSource = document.getElementById('lightbox-video-source');
+
+  if (!lightbox) return;
+
+  if (title) title.textContent = media.name || '';
+
+  if (media.type === 'video') {
+    if (imageWrap) imageWrap.classList.add('hidden');
+    if (videoWrap) videoWrap.classList.remove('hidden');
+
+    if (img) {
+      img.removeAttribute('src');
+      img.alt = '';
+    }
+
+    if (video && videoSource) {
+      video.pause();
+      videoSource.src = getDriveVideoSource(media);
+      video.poster = getDrivePoster(media);
+      video.load();
+    }
+  } else {
+    if (videoWrap) videoWrap.classList.add('hidden');
+    if (imageWrap) imageWrap.classList.remove('hidden');
+
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      if (videoSource) videoSource.src = '';
+      video.load();
+    }
+
+    if (img) {
+      img.src = media.url || media.thumbnail || getDrivePoster(media);
+      img.alt = media.name || '';
+    }
+  }
+
+  lightbox.classList.remove('hidden');
+  lightbox.classList.add('flex');
+}
 function updateLightboxContent(mediaArray){ const media=mediaArray[currentLightboxIndex]; const contentContainer=document.getElementById('lightbox-content'); document.getElementById('lightbox-title').textContent=media.name; if(vjsPlayer){ vjsPlayer.dispose(); vjsPlayer=null; } contentContainer.innerHTML='<div id="media-wrapper" class="w-full h-full flex items-center justify-center"></div>'; const wrapper=document.getElementById('media-wrapper'); if(media.type==='image'){ const hqImg=media.thumbnail.replace('=s600','=s2000'); wrapper.innerHTML=`<img src="${hqImg}" class="max-w-full max-h-[85vh] object-contain rounded-sm metallic-edge shadow-[0_20px_50px_rgba(0,0,0,0.8)] fade-in" alt="${media.name}">`; scheduleAutoAdvance(media); } else if(media.type==='video'){ clearAutoplayTimer(); resetProgressBar(); if(autoplayEnabled){ const bar=document.getElementById('autoplay-progress-bar'); if(bar){ bar.style.transition='none'; bar.style.width='100%'; } } wrapper.innerHTML=`<div class="w-full max-w-5xl fade-in metallic-edge rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.8)]"><div class="player-shell relative"><div class="topbar"><div class="flex-1 min-w-0 pr-4"><div class="vjs-title truncate">${media.name}</div><div class="vjs-meta">HTML5 + Video.js</div></div><div class="actions"><button class="vjs-btn cursor-pointer select-none" id="back10"><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button><button class="vjs-btn primary cursor-pointer select-none" id="togglePlay"><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button><button class="vjs-btn cursor-pointer select-none" id="fwd10">10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button><button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button><button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button></div></div><div class="video-wrap"><video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" crossorigin="anonymous" poster="${media.thumbnail.replace('=s600','=s2000')}"><source src="${media.downloadUrl}" type="video/mp4" />Tu navegador no soporta video HTML5.</video></div><div class="footerbar"><div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">LISTO</div><div class="vjs-small hidden sm:block">Velocidad, volumen y controles incluidos</div></div></div></div>`; vjsPlayer=videojs('my-video',{ controls:true, fluid:true, playbackRates:[0.5,1,1.5,2,4], preload:'auto', responsive:true, aspectRatio:'16:9', controlBar:{ pictureInPictureToggle:false }}); const statusEl=document.getElementById('vjs-status'); const setStatus=txt=>{ if(statusEl) statusEl.textContent=txt; }; const seek=seconds=>{ const t=Math.max(0,vjsPlayer.currentTime()+seconds); vjsPlayer.currentTime(t); }; document.getElementById('back10').addEventListener('click',()=>seek(-10)); document.getElementById('fwd10').addEventListener('click',()=>seek(10)); document.getElementById('togglePlay').addEventListener('click',()=>{ if(vjsPlayer.paused()) vjsPlayer.play(); else vjsPlayer.pause(); }); document.getElementById('fullscreenBtn').addEventListener('click',()=>{ const shell=document.querySelector('.player-shell'); shell.classList.toggle('pseudo-fullscreen'); if(vjsPlayer){ setTimeout(()=>{ vjsPlayer.trigger('resize'); },100); } }); document.getElementById('customCastBtn').addEventListener('click',()=>{ try{ castCurrentMedia(); }catch(err){ showToast('Chromecast bloqueado por entorno seguro',true); } }); vjsPlayer.on('play',()=>setStatus('REPRODUCIENDO')); vjsPlayer.on('pause',()=>setStatus('PAUSADO')); vjsPlayer.on('seeked',()=>setStatus('SALTANDO...')); vjsPlayer.on('ratechange',()=>setStatus('VELOCIDAD: '+vjsPlayer.playbackRate()+'x')); vjsPlayer.on('ended',()=>{ setStatus('FINALIZADO'); if(autoplayEnabled) nextMedia(); }); vjsPlayer.ready(()=>{ setStatus('LISTO'); if(autoplayEnabled) vjsPlayer.play(); }); } const autoplayControls=document.getElementById('autoplay-controls'); if(viewingPlaylistId){ autoplayControls.classList.remove('hidden'); autoplayControls.classList.add('flex'); updateAutoplayButton(); } else { autoplayControls.classList.add('hidden'); autoplayControls.classList.remove('flex'); } }
-function closeLightbox(){ clearAutoplayTimer(); autoplayEnabled=false; const lightbox=document.getElementById('lightbox'); lightbox.classList.add('opacity-0'); setTimeout(()=>{ lightbox.classList.add('hidden'); if(vjsPlayer){ vjsPlayer.dispose(); vjsPlayer=null; } document.getElementById('lightbox-content').innerHTML=''; document.body.style.overflow='auto'; },300); }
-function prevMedia(){ const mediaArray=currentFilter==='all'?currentFiles:currentFiles.filter(m=>m.type===currentFilter); currentLightboxIndex=currentLightboxIndex>0?currentLightboxIndex-1:mediaArray.length-1; updateLightboxContent(mediaArray); }
-function nextMedia(){ const mediaArray=currentFilter==='all'?currentFiles:currentFiles.filter(m=>m.type===currentFilter); currentLightboxIndex=currentLightboxIndex<mediaArray.length-1?currentLightboxIndex+1:0; updateLightboxContent(mediaArray); }
+function closeLightbox() {
+  const lightbox = document.getElementById('lightbox');
+  const video = document.getElementById('lightbox-video');
+  const videoSource = document.getElementById('lightbox-video-source');
+  const imageWrap = document.getElementById('lightbox-image-wrap');
+  const videoWrap = document.getElementById('lightbox-video-wrap');
+
+  clearAutoplayTimer();
+
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    if (videoSource) videoSource.src = '';
+    video.load();
+  }
+
+  if (imageWrap) imageWrap.classList.remove('hidden');
+  if (videoWrap) videoWrap.classList.add('hidden');
+
+  if (lightbox) {
+    lightbox.classList.add('hidden');
+    lightbox.classList.remove('flex');
+  }
+}function nextMedia() {
+  const mediaArray = currentFilter === 'all'
+    ? currentFiles
+    : currentFiles.filter(m => m.type === currentFilter);
+
+  if (!mediaArray.length) return;
+  currentLightboxIndex = (currentLightboxIndex + 1) % mediaArray.length;
+  openLightbox(currentLightboxIndex);
+}
+
+function prevMedia() {
+  const mediaArray = currentFilter === 'all'
+    ? currentFiles
+    : currentFiles.filter(m => m.type === currentFilter);
+
+  if (!mediaArray.length) return;
+  currentLightboxIndex = (currentLightboxIndex - 1 + mediaArray.length) % mediaArray.length;
+  openLightbox(currentLightboxIndex);
+}
 document.addEventListener('DOMContentLoaded',()=>{ checkExistingSession(); initGoogleAuth(); });
