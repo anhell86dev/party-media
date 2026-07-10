@@ -361,7 +361,7 @@
         <button onclick="requestDeleteCurrentMedia()" title="Eliminar" class="cursor-pointer absolute bottom-6 left-6 z-20 text-chrome hover:text-pride-red bg-leather-900 border border-leather-700 hover:border-pride-red w-10 h-10 flex items-center justify-center transition-all shadow-lg">
             <i class="fa-solid fa-trash-can text-sm pointer-events-none"></i>
         </button>
-
+<button id="lightbox-tags-btn" class="vjs-btn">EDITAR TAGS</button>
         <!-- Controles de Autoplay y Cast: Esquina Inferior Derecha -->
         <div class="absolute bottom-6 right-6 z-20 flex gap-3 items-center">
             <div id="autoplay-controls" class="hidden items-center gap-2">
@@ -740,6 +740,12 @@ function closeEditTagsModal() {
   }
 }
 
+document.getElementById('lightbox-tags-btn')?.addEventListener('click', () => {
+  const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+  const media = mediaArray[currentLightboxIndex];
+  if (media) openEditTagsModal(media);
+});
+        
 async function saveTagsFromModal() {
   if (!editingTagsMedia) return;
   const input = document.getElementById('edit-tags-input');
