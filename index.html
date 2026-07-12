@@ -550,7 +550,7 @@
         const MUSIC_CONFIG = {
             spotifyClientId: 'TU_SPOTIFY_CLIENT_ID',
             spotifyClientSecret: 'TU_SPOTIFY_CLIENT_SECRET',
-            soundcloudClientId: '39824186'
+            soundcloudClientId: 'TU_SOUNDCLOUD_CLIENT_ID'
         };
 
         let breadcrumbs = []; let currentFolders = []; let currentFiles = []; let currentFilter = 'all';
@@ -1448,7 +1448,13 @@ async function addSelectionToPlaylist(playlistId) {
 
             let results = [];
             settled.forEach(r => { if (r.status === 'fulfilled' && Array.isArray(r.value)) results = results.concat(r.value); });
-            settled.forEach(r => { if (r.status === 'rejected') console.error('Error buscando música:', r.reason); });
+            const errors = settled.filter(r => r.status === 'rejected').map(r => r.reason && r.reason.message ? r.reason.message : String(r.reason));
+            errors.forEach(msg => console.error('Error buscando música:', msg));
+            if (errors.length) {
+                document.getElementById('music-config-warning-text').textContent = errors.join(' ');
+                warning.classList.remove('hidden');
+                showToast(errors[0], true);
+            }
 
             document.getElementById('music-loading').classList.add('hidden');
             renderMusicResults(results);
@@ -1490,18 +1496,24 @@ async function addSelectionToPlaylist(playlistId) {
 
         async function searchSoundCloudPlaylists(query) {
             if (!MUSIC_CONFIG.soundcloudClientId || MUSIC_CONFIG.soundcloudClientId.startsWith('TU_')) return [];
-            const url = `https://api.soundcloud.com/playlists?q=${encodeURIComponent(query)}&client_id=${MUSIC_CONFIG.soundcloudClientId}&limit=12`;
+            // api-v2 es el endpoint que usa soundcloud.com internamente. A diferencia de api.soundcloud.com (v1, solo
+            // para apps registradas y aprobadas), este acepta los client_id "no oficiales" que se obtienen inspeccionando
+            // las peticiones de red de la propia web de SoundCloud — que es la forma más común de conseguir uno hoy en día.
+            const url = `https://api-v2.soundcloud.com/search/playlists?q=${encodeURIComponent(query)}&client_id=${MUSIC_CONFIG.soundcloudClientId}&limit=12`;
             const response = await fetch(url);
-            if (!response.ok) throw new Error('Fallo la búsqueda en SoundCloud.');
+            if (response.status === 401 || response.status === 403) {
+                throw new Error(`SoundCloud rechazó el client_id (HTTP ${response.status}). Es inválido o expiró — consigue uno nuevo abriendo soundcloud.com, buscando algo, y copiando el parámetro "client_id" de cualquier petición a api-v2.soundcloud.com en la pestaña Red/Network del navegador.`);
+            }
+            if (!response.ok) throw new Error(`Fallo la búsqueda en SoundCloud (HTTP ${response.status}).`);
             const data = await response.json();
-            const items = Array.isArray(data) ? data : [];
+            const items = Array.isArray(data.collection) ? data.collection : (Array.isArray(data) ? data : []);
             return items.map(pl => ({
                 provider: 'soundcloud',
                 id: pl.id,
                 title: pl.title,
                 owner: pl.user ? pl.user.username : '',
                 trackCount: typeof pl.track_count === 'number' ? pl.track_count : (pl.tracks ? pl.tracks.length : null),
-                image: pl.artwork_url || (pl.user ? pl.user.avatar_url : null),
+                image: (pl.artwork_url || (pl.user ? pl.user.avatar_url : null) || '').replace('-large', '-t500x500'),
                 openUrl: pl.permalink_url
             }));
         }
