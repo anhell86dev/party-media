@@ -159,6 +159,12 @@
         }
         .vjs-btn:hover { transform: translateY(-1px); border-color: var(--vjs-accent); color: #fff; }
         .vjs-btn.primary { background: var(--vjs-accent); border-color: transparent; color: #fff; }
+        @media (max-width: 480px) {
+            .topbar, .footerbar { padding: 10px; }
+            .actions { gap: 6px; }
+            .vjs-btn { padding: 8px 10px; font-size: 12px; }
+            .vjs-btn-label { display: none; }
+        }
         .video-wrap { aspect-ratio: 16/9; background: #000; position: relative; }
         .video-js { width: 100%; height: 100%; }
         .footerbar {
@@ -269,7 +275,7 @@
     </nav>
 
     <main class="flex-1 flex flex-col h-full bg-transparent relative overflow-hidden">
-        <header class="bg-leather-900/90 backdrop-blur-md border-b border-leather-700 px-8 py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center sticky top-0 z-10 shadow-sm gap-4">
+        <header class="bg-leather-900/90 backdrop-blur-md border-b border-leather-700 px-4 sm:px-8 py-3 sm:py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center sticky top-0 z-10 shadow-sm gap-3 sm:gap-4">
             <div>
                 <div class="flex items-center gap-3 flex-wrap">
                     <h2 class="text-2xl font-industrial uppercase tracking-wide text-white" id="current-folder-title">Iniciando...</h2>
@@ -282,7 +288,7 @@
                 </div>
             </div>
             
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center flex-wrap gap-2 sm:gap-4 sm:space-x-0">
                 <button id="account-btn" onclick="logout()" title="Cerrar sesión" class="cursor-pointer h-10 px-3 bg-leather-800 rounded-sm flex items-center gap-2 border border-leather-700 hover:bg-pride-red/20 hover:border-pride-red transition-colors text-chrome hover:text-white text-xs font-medium max-w-[140px]">
                     <i class="fa-solid fa-circle-user text-chrome"></i>
                     <span id="account-email" class="truncate font-industrial tracking-wider uppercase"></span>
@@ -306,15 +312,15 @@
                     <button onclick="setViewMode('list')" class="cursor-pointer view-btn w-8 h-8 flex items-center justify-center rounded-sm text-chrome-dark hover:text-white transition-colors" data-view="list" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
                 </div>
 
-                <div class="flex bg-leather-800 p-1 rounded-sm border border-leather-700 hidden sm:flex font-industrial tracking-wider uppercase">
-                    <button onclick="setFilter('all')" class="cursor-pointer filter-btn px-4 py-1 text-sm rounded-sm bg-leather-700 shadow-sm text-pride-red transition-colors metallic-edge" data-filter="all">Todos</button>
-                    <button onclick="setFilter('image')" class="cursor-pointer filter-btn px-4 py-1 text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="image">Fotos</button>
-                    <button onclick="setFilter('video')" class="cursor-pointer filter-btn px-4 py-1 text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="video">Videos</button>
+                <div class="flex bg-leather-800 p-1 rounded-sm border border-leather-700 font-industrial tracking-wider uppercase">
+                    <button onclick="setFilter('all')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm bg-leather-700 shadow-sm text-pride-red transition-colors metallic-edge" data-filter="all">Todos</button>
+                    <button onclick="setFilter('image')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="image">Fotos</button>
+                    <button onclick="setFilter('video')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="video">Videos</button>
                 </div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-8 pb-24 md:pb-8 relative">
+        <div class="flex-1 overflow-y-auto p-4 sm:p-8 pb-24 md:pb-8 relative">
             <div id="error-state" class="hidden flex flex-col items-center justify-center h-64 text-center">
                 <div class="w-16 h-16 bg-pride-red/20 border border-pride-red/50 rounded-sm flex items-center justify-center mb-4 text-pride-red">
                     <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
@@ -1144,10 +1150,10 @@ async function addSelectionToPlaylist(playlistId) {
                                 <span class="mt-1 text-xs text-chrome font-industrial tracking-widest bg-black/90 px-2 py-1 rounded-sm pointer-events-none">${count} ITEMS</span>
                             </div>
                         </div>
-                        <button onclick="event.stopPropagation(); playPlaylist('${id}')" class="cursor-pointer absolute bottom-3 right-3 w-10 h-10 rounded-sm metallic-edge bg-pride-red hover:bg-red-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 shadow-[0_0_15px_rgba(229,0,0,0.5)]" title="Watch Playlist">
+                        <button onclick="event.stopPropagation(); playPlaylist('${id}')" class="cursor-pointer absolute bottom-3 right-3 w-10 h-10 rounded-sm metallic-edge bg-pride-red hover:bg-red-700 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all z-20 shadow-[0_0_15px_rgba(229,0,0,0.5)]" title="Watch Playlist">
                             <i class="fa-solid fa-play text-sm ml-1 pointer-events-none"></i>
                         </button>
-                        <button onclick="event.stopPropagation(); deletePlaylist('${id}')" class="cursor-pointer absolute top-3 right-3 w-8 h-8 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg" title="Eliminar Playlist">
+                        <button onclick="event.stopPropagation(); deletePlaylist('${id}')" class="cursor-pointer absolute top-3 right-3 w-8 h-8 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all z-20 shadow-lg" title="Eliminar Playlist">
                             <i class="fa-solid fa-trash-can text-xs pointer-events-none"></i>
                         </button>
                     </div>
@@ -1397,14 +1403,14 @@ async function addSelectionToPlaylist(playlistId) {
                 if (currentViewMode === 'list') {
                     const typeIcon = isVideo ? '<i class="fa-solid fa-video text-xs text-white"></i>' : '<i class="fa-solid fa-image text-xs text-white"></i>';
                     const checkboxHtml = selectionMode ? `<div class="w-6 h-6 rounded-sm metallic-edge flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isSelected ? 'bg-pride-red' : 'bg-leather-800'}">${isSelected ? '<i class="fa-solid fa-check text-white text-[10px]"></i>' : ''}</div>` : '';
-                    const actionBtnHtml = selectionMode ? '' : (viewingPlaylistId ? `<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>` : `<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`);
+                    const actionBtnHtml = selectionMode ? '' : (viewingPlaylistId ? `<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>` : `<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`);
                     gridContainer.innerHTML += `<div class="group flex items-center bg-leather-900 metallic-edge ${isSelected ? 'border-pride-red shadow-[0_0_10px_rgba(229,0,0,0.2)]' : ''} hover:border-chrome rounded-sm p-3 cursor-pointer select-none transition-all fade-in" onclick="${clickAction}">${checkboxHtml}<div class="w-20 h-14 flex-shrink-0 relative rounded-sm metallic-edge overflow-hidden mr-5 bg-leather-800"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy"><div class="absolute inset-0 flex items-center justify-center bg-black/60 group-hover:bg-black/20 transition-colors pointer-events-none">${typeIcon}</div></div><span class="text-chrome font-medium group-hover:text-white truncate flex-1 tracking-wide pointer-events-none">${media.name}</span>${actionBtnHtml}</div>`;
                 } else {
                     const playIconSize = currentViewMode === 'small' ? 'w-8 h-8 text-sm' : (currentViewMode === 'large' ? 'w-16 h-16 text-2xl' : 'w-12 h-12 text-lg');
                     const iconHtml = isVideo ? `<div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="${playIconSize} bg-leather-900/80 metallic-edge rounded-sm flex items-center justify-center text-chrome backdrop-blur-sm group-hover:bg-pride-red group-hover:text-white group-hover:scale-110 transition-all shadow-xl"><i class="fa-solid fa-play ml-1"></i></div></div>` : '';
                     const checkboxHtml = selectionMode ? `<div class="absolute top-3 left-3 w-8 h-8 rounded-sm metallic-edge flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-pride-red' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i class="fa-solid fa-check text-white text-sm"></i>' : ''}</div>` : '';
-                    const actionBtnHtml = selectionMode ? '' : (viewingPlaylistId ? `<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>` : `<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`);
-                    gridContainer.innerHTML += `<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none fade-in transition-all duration-300 hover:-translate-y-1 hover:border-chrome hover:shadow-2xl ${isSelected ? 'border-pride-red shadow-[0_0_15px_rgba(229,0,0,0.3)]' : 'shadow-black'}" onclick="${clickAction}"><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100 pointer-events-none" loading="lazy">${checkboxHtml}${selectionMode ? '' : iconHtml}${actionBtnHtml}<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none"><p class="text-white text-xs font-medium truncate tracking-wide">${media.name}</p></div></div></div>`;
+                    const actionBtnHtml = selectionMode ? '' : (viewingPlaylistId ? `<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>` : `<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`);
+                    gridContainer.innerHTML += `<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none fade-in transition-all duration-300 hover:-translate-y-1 hover:border-chrome hover:shadow-2xl ${isSelected ? 'border-pride-red shadow-[0_0_15px_rgba(229,0,0,0.3)]' : 'shadow-black'}" onclick="${clickAction}"><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100 pointer-events-none" loading="lazy">${checkboxHtml}${selectionMode ? '' : iconHtml}${actionBtnHtml}<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none"><p class="text-white text-xs font-medium truncate tracking-wide">${media.name}</p></div></div></div>`;
                 }
             });
         }
@@ -1512,9 +1518,9 @@ async function addSelectionToPlaylist(playlistId) {
                             <div class="footerbar">
                                 <div id="vjs-status" class="text-pride-red font-industrial tracking-widest uppercase text-sm">CARGANDO...</div>
                                 <div class="actions">
-                                    <button class="vjs-btn cursor-pointer select-none" id="back10" disabled><i class="fa-solid fa-rotate-left pointer-events-none"></i> 10s</button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="back10" disabled><i class="fa-solid fa-rotate-left pointer-events-none"></i> <span class="vjs-btn-label">10s</span></button>
                                     <button class="vjs-btn primary cursor-pointer select-none" id="togglePlay" disabled><i class="fa-solid fa-play pointer-events-none"></i> / <i class="fa-solid fa-pause pointer-events-none"></i></button>
-                                    <button class="vjs-btn cursor-pointer select-none" id="fwd10" disabled>10s <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
+                                    <button class="vjs-btn cursor-pointer select-none" id="fwd10" disabled><span class="vjs-btn-label">10s</span> <i class="fa-solid fa-rotate-right pointer-events-none"></i></button>
                                     <button class="vjs-btn cursor-pointer select-none" id="customCastBtn" title="Enviar a Chromecast"><i class="fa-brands fa-chromecast pointer-events-none"></i></button>
                                     <button class="vjs-btn cursor-pointer select-none" id="fullscreenBtn" title="Pantalla Completa"><i class="fa-solid fa-expand pointer-events-none"></i></button>
                                     <button class="px-2 py-1 text-xs border border-gray-600 rounded" onclick="openEditTagsModal(buildMediaFromRef({ id: '${media.id}', type: '${media.type}', name: '${media.name}', mimeType: '${media.mimeType}', tags: ${JSON.stringify(media.tags || [])} }))">
