@@ -1416,57 +1416,52 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         let currentVideoBlobUrl = null;
+        let activeLocalVideoPermission = null; // { fileId, permissionId }
 
         function revokeCurrentVideoBlobUrl() {
             if (currentVideoBlobUrl) { URL.revokeObjectURL(currentVideoBlobUrl); currentVideoBlobUrl = null; }
         }
 
+        async function releaseLocalVideoPermission() {
+            if (!activeLocalVideoPermission) return;
+            const { fileId, permissionId } = activeLocalVideoPermission;
+            activeLocalVideoPermission = null;
+            await revokeFilePublicAccess(fileId, permissionId);
+        }
+
         function loadVideoSource(media, setStatus, onReady, onProgress) {
-            const apply = () => {
-                setStatus('CARGANDO...');
-                const apiUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&acknowledgeAbuse=true`;
-                fetch(apiUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } })
-                    .then(res => {
-                        if (res.status === 401) { handleAuthExpired(); throw new Error('auth-expired'); }
-                        if (!res.ok) throw new Error('http-' + res.status);
+            setStatus('PREPARANDO...');
+            ensureDriveAuth(async () => {
+                try {
+                    await releaseLocalVideoPermission();
+                    const permissionId = await makeFilePublic(media.id);
+                    activeLocalVideoPermission = { fileId: media.id, permissionId };
 
-                        if (!res.body || typeof res.body.getReader !== 'function') return res.blob();
+                    if (!vjsPlayer) return;
+                    const streamUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`;
+                    vjsPlayer.src({ src: streamUrl, type: media.mimeType || 'video/mp4' });
+                    setStatus('CARGANDO...');
 
-                        const totalStr = res.headers.get('Content-Length');
-                        const total = totalStr ? parseInt(totalStr, 10) : 0;
-                        const reader = res.body.getReader();
-                        const chunks = [];
-                        let loaded = 0;
-
-                        const pump = () => reader.read().then(({ done, value }) => {
-                            if (done) return new Blob(chunks);
-                            chunks.push(value);
-                            loaded += value.length;
-                            if (onProgress) onProgress(total ? Math.min(100, Math.round((loaded / total) * 100)) : null, loaded, total);
-                            return pump();
-                        });
-                        return pump();
-                    })
-                    .then(blob => {
-                        revokeCurrentVideoBlobUrl();
-                        currentVideoBlobUrl = URL.createObjectURL(blob);
-                        if (!vjsPlayer) return;
-                        vjsPlayer.src({ src: currentVideoBlobUrl, type: media.mimeType || 'video/mp4' });
+                    vjsPlayer.one('canplay', () => {
                         setStatus('LISTO');
                         if (onReady) onReady();
                         if (autoplayEnabled) { vjsPlayer.play(); }
-                    })
-                    .catch(err => {
-                        if (err.message === 'auth-expired') {
-                            setStatus('SESIÓN CADUCADA');
-                            ensureDriveAuth(() => loadVideoSource(media, setStatus, onReady, onProgress));
-                        } else {
-                            setStatus('ERROR AL CARGAR');
-                            showToast('No se pudo cargar el video', true);
-                        }
                     });
-            };
-            ensureDriveAuth(apply);
+                    vjsPlayer.one('error', () => {
+                        setStatus('ERROR AL CARGAR');
+                        showToast('No se pudo cargar el video', true);
+                    });
+                    if (onProgress) {
+                        vjsPlayer.on('progress', () => {
+                            try { onProgress(Math.round((vjsPlayer.bufferedPercent() || 0) * 100)); } catch (e) { /* no-op */ }
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error al preparar video:', err);
+                    setStatus('ERROR AL CARGAR');
+                    showToast('No se pudo preparar el video', true);
+                }
+            });
         }
 
         function updateLightboxContent(mediaArray) {
@@ -1476,6 +1471,7 @@ async function addSelectionToPlaylist(playlistId) {
             
             if (vjsPlayer) { vjsPlayer.dispose(); vjsPlayer = null; }
             revokeCurrentVideoBlobUrl();
+            releaseLocalVideoPermission();
 
             contentContainer.innerHTML = '<div id="media-wrapper" class="w-full h-full flex items-center justify-center"></div>';
             const wrapper = document.getElementById('media-wrapper');
@@ -1500,7 +1496,7 @@ async function addSelectionToPlaylist(playlistId) {
                             </div>
 
                             <div class="video-wrap">
-                                <!-- El src se asigna en JS tras obtener un blob autenticado con Bearer token (Drive no sirve video privado solo con API key) -->
+                                <!-- El src se asigna en JS: el archivo se comparte temporalmente (permiso "cualquiera con el enlace") y se reproduce en streaming directo con la API key, sin descargar el archivo completo antes -->
                                 <video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" poster="${media.thumbnail.replace('=s600', '=s2000')}">
                                     Tu navegador no soporta video HTML5.
                                 </video>
@@ -1550,17 +1546,9 @@ async function addSelectionToPlaylist(playlistId) {
                 };
                 [back10Btn, fwd10Btn, togglePlayBtn].forEach(btn => { if (btn) btn.classList.add('opacity-40', 'cursor-not-allowed'); });
 
-                const formatBytes = (bytes) => { if (!bytes) return '0 MB'; return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; };
-                const onProgress = (percent, loaded, total) => {
-                    if (percent !== null && percent !== undefined) {
-                        if (loadingBar) loadingBar.style.width = percent + '%';
-                        if (loadingText) loadingText.textContent = `Cargando video... ${percent}%`;
-                        setStatus(`CARGANDO ${percent}%`);
-                    } else {
-                        if (loadingBar) loadingBar.style.width = '100%';
-                        if (loadingText) loadingText.textContent = `Cargando video... ${formatBytes(loaded)}`;
-                        setStatus('CARGANDO...');
-                    }
+                const onProgress = (percent) => {
+                    if (loadingBar) loadingBar.style.width = percent + '%';
+                    if (loadingText) loadingText.textContent = `Cargando video... ${percent}%`;
                 };
 
                 loadVideoSource(media, setStatus, enablePlaybackControls, onProgress);
@@ -1597,6 +1585,7 @@ async function addSelectionToPlaylist(playlistId) {
                 lightbox.classList.add('hidden'); 
                 if (vjsPlayer) { vjsPlayer.dispose(); vjsPlayer = null; } 
                 revokeCurrentVideoBlobUrl();
+                releaseLocalVideoPermission();
                 document.getElementById('lightbox-content').innerHTML = ''; 
                 document.body.style.overflow = 'auto'; 
             }, 300); 
