@@ -1363,7 +1363,7 @@ async function addSelectionToPlaylist(playlistId) {
             if (currentVideoBlobUrl) { URL.revokeObjectURL(currentVideoBlobUrl); currentVideoBlobUrl = null; }
         }
 
-        function loadVideoSource(media, setStatus, onReady) {
+        function loadVideoSource(media, setStatus, onReady, onProgress) {
             const apply = () => {
                 setStatus('CARGANDO...');
                 const apiUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&acknowledgeAbuse=true`;
@@ -1371,7 +1371,23 @@ async function addSelectionToPlaylist(playlistId) {
                     .then(res => {
                         if (res.status === 401) { handleAuthExpired(); throw new Error('auth-expired'); }
                         if (!res.ok) throw new Error('http-' + res.status);
-                        return res.blob();
+
+                        if (!res.body || typeof res.body.getReader !== 'function') return res.blob();
+
+                        const totalStr = res.headers.get('Content-Length');
+                        const total = totalStr ? parseInt(totalStr, 10) : 0;
+                        const reader = res.body.getReader();
+                        const chunks = [];
+                        let loaded = 0;
+
+                        const pump = () => reader.read().then(({ done, value }) => {
+                            if (done) return new Blob(chunks);
+                            chunks.push(value);
+                            loaded += value.length;
+                            if (onProgress) onProgress(total ? Math.min(100, Math.round((loaded / total) * 100)) : null, loaded, total);
+                            return pump();
+                        });
+                        return pump();
                     })
                     .then(blob => {
                         revokeCurrentVideoBlobUrl();
@@ -1385,7 +1401,7 @@ async function addSelectionToPlaylist(playlistId) {
                     .catch(err => {
                         if (err.message === 'auth-expired') {
                             setStatus('SESIÓN CADUCADA');
-                            ensureDriveAuth(() => loadVideoSource(media, setStatus, onReady));
+                            ensureDriveAuth(() => loadVideoSource(media, setStatus, onReady, onProgress));
                         } else {
                             setStatus('ERROR AL CARGAR');
                             showToast('No se pudo cargar el video', true);
@@ -1430,9 +1446,12 @@ async function addSelectionToPlaylist(playlistId) {
                                 <video id="my-video" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" poster="${media.thumbnail.replace('=s600', '=s2000')}">
                                     Tu navegador no soporta video HTML5.
                                 </video>
-                                <div id="video-loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-20">
+                                <div id="video-loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 z-20">
                                     <i class="fa-solid fa-circle-notch fa-spin text-3xl text-pride-red"></i>
-                                    <span class="font-industrial uppercase tracking-widest text-xs text-chrome">Cargando video...</span>
+                                    <span id="video-loading-text" class="font-industrial uppercase tracking-widest text-xs text-chrome">Cargando video...</span>
+                                    <div class="w-40 h-1.5 bg-leather-700 rounded-full overflow-hidden">
+                                        <div id="video-loading-bar" class="h-full bg-pride-red transition-all duration-200" style="width:0%"></div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1462,6 +1481,8 @@ async function addSelectionToPlaylist(playlistId) {
                 const seek = (seconds) => { const t = Math.max(0, vjsPlayer.currentTime() + seconds); vjsPlayer.currentTime(t); };
 
                 const loadingOverlay = document.getElementById('video-loading-overlay');
+                const loadingText = document.getElementById('video-loading-text');
+                const loadingBar = document.getElementById('video-loading-bar');
                 const back10Btn = document.getElementById('back10');
                 const fwd10Btn = document.getElementById('fwd10');
                 const togglePlayBtn = document.getElementById('togglePlay');
@@ -1471,7 +1492,20 @@ async function addSelectionToPlaylist(playlistId) {
                 };
                 [back10Btn, fwd10Btn, togglePlayBtn].forEach(btn => { if (btn) btn.classList.add('opacity-40', 'cursor-not-allowed'); });
 
-                loadVideoSource(media, setStatus, enablePlaybackControls);
+                const formatBytes = (bytes) => { if (!bytes) return '0 MB'; return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; };
+                const onProgress = (percent, loaded, total) => {
+                    if (percent !== null && percent !== undefined) {
+                        if (loadingBar) loadingBar.style.width = percent + '%';
+                        if (loadingText) loadingText.textContent = `Cargando video... ${percent}%`;
+                        setStatus(`CARGANDO ${percent}%`);
+                    } else {
+                        if (loadingBar) loadingBar.style.width = '100%';
+                        if (loadingText) loadingText.textContent = `Cargando video... ${formatBytes(loaded)}`;
+                        setStatus('CARGANDO...');
+                    }
+                };
+
+                loadVideoSource(media, setStatus, enablePlaybackControls, onProgress);
 
                 back10Btn.addEventListener('click', () => seek(-10));
                 fwd10Btn.addEventListener('click', () => seek(10));
