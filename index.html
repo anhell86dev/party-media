@@ -1748,6 +1748,22 @@ async function addSelectionToPlaylist(playlistId) {
             await revokeFilePublicAccess(fileId, permissionId);
         }
 
+        // El permiso "cualquiera con el enlace" que otorga makeFilePublic puede tardar unos segundos
+        // en propagarse en los servidores de Google. Si se pide el video de inmediato, Drive puede
+        // responder 403 en vez del contenido, y el navegador lo reporta como "formato no soportado".
+        // Este chequeo reintenta unas veces antes de entregarle la URL al reproductor.
+        async function waitForStreamReady(url, attempts = 5, delayMs = 700) {
+            for (let i = 0; i < attempts; i++) {
+                try {
+                    const res = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-0' } });
+                    if (res.ok || res.status === 206) return { success: true };
+                    if (res.status !== 403 && res.status !== 404) return { success: false, status: res.status };
+                } catch (e) { /* red momentánea, reintenta */ }
+                await new Promise(r => setTimeout(r, delayMs));
+            }
+            return { success: false, status: 403 };
+        }
+
         function loadVideoSource(media, setStatus, onReady, onProgress) {
             setStatus('PREPARANDO...');
             ensureDriveAuth(async () => {
@@ -1758,6 +1774,16 @@ async function addSelectionToPlaylist(playlistId) {
 
                     if (!vjsPlayer) return;
                     const streamUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`;
+
+                    setStatus('VERIFICANDO ACCESO...');
+                    const ready = await waitForStreamReady(streamUrl);
+                    if (!vjsPlayer) return;
+                    if (!ready.success) {
+                        setStatus('ERROR AL CARGAR');
+                        showToast(`No se pudo acceder al video (HTTP ${ready.status || '?'}). Revisa los permisos de la carpeta en Drive.`, true);
+                        return;
+                    }
+
                     vjsPlayer.src({ src: streamUrl, type: media.mimeType || 'video/mp4' });
                     setStatus('CARGANDO...');
 
@@ -1767,8 +1793,9 @@ async function addSelectionToPlaylist(playlistId) {
                         if (autoplayEnabled) { vjsPlayer.play(); }
                     });
                     vjsPlayer.one('error', () => {
+                        const err = vjsPlayer.error();
                         setStatus('ERROR AL CARGAR');
-                        showToast('No se pudo cargar el video', true);
+                        showToast(err && err.message ? err.message : 'No se pudo cargar el video', true);
                     });
                     if (onProgress) {
                         vjsPlayer.on('progress', () => {
