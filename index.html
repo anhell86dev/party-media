@@ -807,7 +807,10 @@ async function addSelectionToPlaylist(playlistId) {
             const btn = document.getElementById('lightbox-cast-btn'); if (!btn) return;
             const connected = sessionState === 'SESSION_STARTED' || sessionState === 'SESSION_RESUMED';
             btn.classList.toggle('text-pride-red', connected); btn.title = connected ? 'Conectado — enviar a TV' : 'Enviar a TV';
-            if (sessionState === 'SESSION_ENDED' || sessionState === 'NO_SESSION') { activeCastSession = null; activeCastMedia = null; }
+            if (sessionState === 'SESSION_ENDED' || sessionState === 'NO_SESSION') {
+                activeCastSession = null; activeCastMedia = null;
+                revokeActiveCastPermission();
+            }
         }
 
         function showToast(message, isError = false) {
@@ -823,26 +826,81 @@ async function addSelectionToPlaylist(playlistId) {
             toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
         }
 
-        function castMediaToTV(media, session) {
-            const mimeType = media.mimeType || (media.type === 'video' ? 'video/mp4' : 'image/jpeg');
-            const castUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
-            const mediaInfo = new chrome.cast.media.MediaInfo(castUrl, mimeType);
-            const metadata = new chrome.cast.media.GenericMediaMetadata();
-            metadata.title = media.name; metadata.images = [{ url: media.thumbnail }]; mediaInfo.metadata = metadata;
-            const request = new chrome.cast.media.LoadRequest(mediaInfo);
-            session.loadMedia(request).then(() => {
-                activeCastSession = session; activeCastMedia = media;
-                showToast(`En TV: "${media.name}"`);
-            }, (err) => { console.error('Error Cast:', err); showToast('Fallo al conectar con TV', true); });
+        let activeCastPermission = null; // { fileId, permissionId }
+
+        async function makeFilePublic(fileId) {
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?fields=id`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: 'reader', type: 'anyone' })
+            });
+            if (!res.ok) throw new Error('No se pudo compartir el archivo para Chromecast');
+            const data = await res.json();
+            return data.id; // permissionId
+        }
+
+        async function revokeFilePublicAccess(fileId, permissionId) {
+            if (!fileId || !permissionId || !accessToken) return;
+            try {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions/${permissionId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+            } catch (err) { console.error('No se pudo revocar el permiso público:', err); }
+        }
+
+        async function revokeActiveCastPermission() {
+            if (!activeCastPermission) return;
+            const { fileId, permissionId } = activeCastPermission;
+            activeCastPermission = null;
+            await revokeFilePublicAccess(fileId, permissionId);
+        }
+
+        async function castMediaToTV(media, session) {
+            try {
+                await revokeActiveCastPermission();
+
+                const mimeType = media.mimeType || (media.type === 'video' ? 'video/mp4' : 'image/jpeg');
+                const permissionId = await makeFilePublic(media.id);
+                activeCastPermission = { fileId: media.id, permissionId };
+
+                const castUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`;
+                const mediaInfo = new chrome.cast.media.MediaInfo(castUrl, mimeType);
+                mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+                const metadata = new chrome.cast.media.GenericMediaMetadata();
+                metadata.title = media.name; metadata.images = [{ url: media.thumbnail }]; mediaInfo.metadata = metadata;
+                const request = new chrome.cast.media.LoadRequest(mediaInfo);
+
+                session.loadMedia(request).then(() => {
+                    activeCastSession = session; activeCastMedia = media;
+                    showToast(`En TV: "${media.name}"`);
+
+                    const mediaSession = typeof session.getMediaSession === 'function' ? session.getMediaSession() : null;
+                    if (mediaSession && typeof mediaSession.addUpdateListener === 'function') {
+                        const onCastMediaUpdate = (isAlive) => {
+                            if (mediaSession.playerState === chrome.cast.media.PlayerState.IDLE && mediaSession.idleReason === chrome.cast.media.IdleReason.ERROR) {
+                                showToast('La TV no pudo reproducir el archivo', true);
+                                mediaSession.removeUpdateListener(onCastMediaUpdate);
+                            }
+                            if (!isAlive) mediaSession.removeUpdateListener(onCastMediaUpdate);
+                        };
+                        mediaSession.addUpdateListener(onCastMediaUpdate);
+                    }
+                }, (err) => { console.error('Error Cast:', err); showToast('Fallo al conectar con TV', true); });
+            } catch (err) {
+                console.error('Error al preparar Chromecast:', err);
+                showToast('No se pudo preparar el archivo para Chromecast', true);
+            }
         }
 
         function refreshActiveCastPlayback() {
-            if (!activeCastSession || !activeCastMedia || !accessToken) return;
+            if (!activeCastSession || !activeCastMedia) return;
             const mediaSession = typeof activeCastSession.getMediaSession === 'function' ? activeCastSession.getMediaSession() : null;
             const resumeTime = mediaSession && typeof mediaSession.getEstimatedTime === 'function' ? mediaSession.getEstimatedTime() : 0;
             const mimeType = activeCastMedia.mimeType || (activeCastMedia.type === 'video' ? 'video/mp4' : 'image/jpeg');
-            const castUrl = `https://www.googleapis.com/drive/v3/files/${activeCastMedia.id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
+            const castUrl = `https://www.googleapis.com/drive/v3/files/${activeCastMedia.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`;
             const mediaInfo = new chrome.cast.media.MediaInfo(castUrl, mimeType);
+            mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
             const metadata = new chrome.cast.media.GenericMediaMetadata();
             metadata.title = activeCastMedia.name; metadata.images = [{ url: activeCastMedia.thumbnail }]; mediaInfo.metadata = metadata;
             const request = new chrome.cast.media.LoadRequest(mediaInfo);
