@@ -891,8 +891,8 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         async function callAccessScript(payload) {
-            const url = new URL(GAS_URL); Object.keys(payload).forEach(key => url.searchParams.set(key, payload[key])); let response;
-            try { response = await fetch(url.toString(), { method: 'GET' }); } catch (err) { throw new Error('Servidor fuera de alcance.'); }
+            const url = new URL(GAS_URL); Object.keys(payload).forEach(key => url.searchParams.set(key, payload[key])); url.searchParams.set('_ts', Date.now()); let response;
+            try { response = await fetch(url.toString(), { method: 'GET', cache: 'no-store' }); } catch (err) { throw new Error('Servidor fuera de alcance.'); }
             const rawText = await response.text();
             if (!response.ok) throw new Error(`HTTP Error ${response.status}.`);
             if (rawText.trim().startsWith('<')) throw new Error('Script privado. Ajusta permisos en Google.');
