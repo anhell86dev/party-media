@@ -283,10 +283,14 @@
             <h1 class="text-2xl font-industrial uppercase tracking-wider text-white">Party Media</h1>
         </div>
         
-        <div class="p-4 border-b border-leather-700">
+        <div class="p-4 border-b border-leather-700 space-y-1">
             <button onclick="showPlaylistsView()" class="cursor-pointer w-full text-left px-4 py-3 flex items-center space-x-4 transition-all duration-200 text-white hover:bg-leather-700 rounded-sm border-l-2 border-pride-red bg-leather-900/50 shadow-inner">
                 <i class="fa-solid fa-layer-group text-pride-red w-5 text-center text-lg pointer-events-none"></i>
                 <span class="font-industrial uppercase tracking-widest text-sm pointer-events-none">Playlists</span>
+            </button>
+            <button id="music-nav-btn" onclick="showMusicView()" class="cursor-pointer w-full text-left px-4 py-3 flex items-center space-x-4 transition-all duration-200 text-chrome hover:bg-leather-700 hover:text-white rounded-sm border-l-2 border-transparent">
+                <i class="fa-solid fa-music text-chrome-dark w-5 text-center text-lg pointer-events-none"></i>
+                <span class="font-industrial uppercase tracking-widest text-sm pointer-events-none">Música</span>
             </button>
         </div>
 
@@ -302,6 +306,10 @@
         <button onclick="showPlaylistsView()" class="cursor-pointer flex flex-col items-center p-2 transition-colors text-pride-red hover:text-white">
             <i class="fa-solid fa-layer-group text-lg mb-1 pointer-events-none"></i>
             <span class="font-industrial uppercase tracking-widest text-[10px] pointer-events-none">Playlists</span>
+        </button>
+        <button id="music-nav-btn-mobile" onclick="showMusicView()" class="cursor-pointer flex flex-col items-center p-2 transition-colors text-chrome hover:text-white">
+            <i class="fa-solid fa-music text-lg mb-1 pointer-events-none"></i>
+            <span class="font-industrial uppercase tracking-widest text-[10px] pointer-events-none">Música</span>
         </button>
         <div id="mobile-folder-list" class="flex w-full justify-around overflow-x-auto">
             <!-- Se llena con JS -->
@@ -359,7 +367,7 @@
                 <h3 class="text-lg font-industrial uppercase tracking-wider text-white">Error de Conexión</h3>
                 <p class="text-chrome text-sm mt-1" id="error-message">Revisa los permisos de la carpeta en Drive.</p>
             </div>
-<div class="mb-4 space-y-3">
+<div id="tag-search-container" class="mb-4 space-y-3">
   <input
     id="tag-search-input"
     type="text"
@@ -378,6 +386,51 @@
                 </div>
                 <h3 class="text-lg font-industrial uppercase tracking-wider text-chrome" id="empty-title">Carpeta Vacía</h3>
                 <p class="text-chrome-dark text-sm mt-1" id="empty-subtitle">No hay archivos compatibles aquí.</p>
+            </div>
+
+            <!-- SECCIÓN DE MÚSICA: buscador SoundCloud + Spotify -->
+            <div id="music-view" class="hidden relative z-10">
+                <div class="mb-6">
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-chrome-dark pointer-events-none"></i>
+                            <input id="music-search-input" type="text" placeholder="Buscar playlists (artista, género, mood...)"
+                                onkeydown="if(event.key==='Enter') searchMusic();"
+                                class="w-full bg-leather-900 metallic-input rounded-sm pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-pride-red focus:border-pride-red transition-all">
+                        </div>
+                        <button onclick="searchMusic()" class="cursor-pointer px-6 py-3 rounded-sm bg-pride-red hover:bg-red-700 metallic-edge text-white font-industrial uppercase tracking-widest text-sm transition-colors shadow-lg shadow-pride-red/20 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass text-sm pointer-events-none"></i> Buscar
+                        </button>
+                    </div>
+                    <div class="flex bg-leather-800 p-1 rounded-sm border border-leather-700 font-industrial tracking-wider uppercase w-fit mt-3">
+                        <button onclick="setMusicProvider('all')" data-provider="all" class="music-provider-btn cursor-pointer px-4 py-1.5 text-xs sm:text-sm rounded-sm bg-leather-700 shadow-sm text-pride-red transition-colors metallic-edge">Todos</button>
+                        <button onclick="setMusicProvider('spotify')" data-provider="spotify" class="music-provider-btn cursor-pointer px-4 py-1.5 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors"><i class="fa-brands fa-spotify mr-1 pointer-events-none"></i>Spotify</button>
+                        <button onclick="setMusicProvider('soundcloud')" data-provider="soundcloud" class="music-provider-btn cursor-pointer px-4 py-1.5 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors"><i class="fa-brands fa-soundcloud mr-1 pointer-events-none"></i>SoundCloud</button>
+                    </div>
+                </div>
+
+                <div id="music-config-warning" class="hidden mb-6 bg-leather-800 metallic-edge rounded-sm p-4 text-sm text-chrome flex items-start gap-3">
+                    <i class="fa-solid fa-triangle-exclamation text-pride-red mt-0.5"></i>
+                    <div>
+                        <p class="text-white font-industrial uppercase tracking-wider text-xs mb-1">Faltan credenciales</p>
+                        <p id="music-config-warning-text" class="text-chrome-dark"></p>
+                    </div>
+                </div>
+
+                <div id="music-loading" class="hidden flex flex-col items-center justify-center h-48 text-center">
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-pride-red mb-3"></i>
+                    <p class="text-chrome text-sm font-industrial uppercase tracking-wider">Buscando playlists...</p>
+                </div>
+
+                <div id="music-empty" class="hidden flex flex-col items-center justify-center h-48 text-center">
+                    <div class="w-16 h-16 bg-leather-800 border border-leather-700 rounded-sm flex items-center justify-center mb-4 text-chrome shadow-inner">
+                        <i class="fa-solid fa-record-vinyl text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-industrial uppercase tracking-wider text-chrome">Busca una playlist</h3>
+                    <p class="text-chrome-dark text-sm mt-1">Escribe un término y presiona Buscar.</p>
+                </div>
+
+                <div id="music-results" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
             </div>
         </div>
     </main>
@@ -485,10 +538,26 @@
             oauthClientId: '784487284585-0vr8s9arr0el8c0u88630gh8p8h9nkbh.apps.googleusercontent.com'
         };
 
+        // Credenciales de las APIs de música. Reemplaza estos valores por los tuyos.
+        // Spotify: https://developer.spotify.com/dashboard (crea una app y copia Client ID / Client Secret)
+        //   Nota: el flujo "Client Credentials" solo permite BUSCAR contenido público (no requiere login del usuario),
+        //   pero como esto corre 100% en el navegador, el Client Secret queda expuesto en el código fuente,
+        //   igual que ya ocurre con la apiKey de Google Drive en DRIVE_CONFIG de arriba. Para producción real,
+        //   lo ideal es pedir el token desde un backend/proxy propio, pero para este proyecto se mantiene
+        //   el mismo enfoque "todo en el cliente" que ya usa el resto de la app.
+        // SoundCloud: https://soundcloud.com/you/apps (requiere una app registrada; el registro público está
+        //   cerrado desde 2020, así que se necesita un client_id ya existente).
+        const MUSIC_CONFIG = {
+            spotifyClientId: 'TU_SPOTIFY_CLIENT_ID',
+            spotifyClientSecret: 'TU_SPOTIFY_CLIENT_SECRET',
+            soundcloudClientId: '39824186'
+        };
+
         let breadcrumbs = []; let currentFolders = []; let currentFiles = []; let currentFilter = 'all';
         let currentViewMode = 'medium'; let currentLightboxIndex = 0; let castAvailable = false;
         let rootFolders = []; let isViewingPlaylistRoot = false;
         let vjsPlayer = null; 
+        let musicProviderFilter = 'all'; let spotifyAccessToken = null; let spotifyTokenExpiresAt = 0; let musicSearchToken = 0;
 
         async function fetchFromDrive(query, fields) {
             const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&key=${DRIVE_CONFIG.apiKey}&fields=${encodeURIComponent(fields)}&includeItemsFromAllDrives=true&supportsAllDrives=true`;
@@ -1144,6 +1213,7 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         function showPlaylistsView() {
+            hideMusicView();
             isViewingPlaylistRoot = true;
             document.getElementById('error-state').classList.add('hidden'); document.getElementById('current-folder-title').textContent = "MIS PLAYLISTS";
             const playBtn = document.getElementById('play-playlist-btn'); if (playBtn) { playBtn.classList.add('hidden'); playBtn.classList.remove('flex'); }
@@ -1244,6 +1314,7 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         function openPlaylistView(id) {
+            hideMusicView();
             isViewingPlaylistRoot = false; const pl = playlists[id]; if (!pl) return;
             viewingPlaylistId = id; currentFolders = []; currentFiles = (pl.items || []).map(buildMediaFromRef);
             document.getElementById('current-folder-title').textContent = pl.name;
@@ -1296,6 +1367,207 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         function playCurrentPlaylist() { if (!viewingPlaylistId || currentFiles.length === 0) return; autoplayEnabled = true; showToast('REPRODUCCIÓN SECUENCIAL INICIADA'); openLightbox(0); }
+
+        /* ===================== SECCIÓN DE MÚSICA (SoundCloud + Spotify) ===================== */
+
+        function showMusicView() {
+            isViewingPlaylistRoot = false; viewingPlaylistId = null;
+            document.getElementById('error-state').classList.add('hidden');
+            const playBtn = document.getElementById('play-playlist-btn'); if (playBtn) { playBtn.classList.add('hidden'); playBtn.classList.remove('flex'); }
+            document.getElementById('current-folder-title').textContent = 'MÚSICA';
+            breadcrumbs = [];
+            document.getElementById('breadcrumbs').innerHTML = `<span class="text-pride-red font-industrial tracking-wider uppercase">Buscar Playlists</span>`;
+
+            document.getElementById('gallery-grid').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+            const tagSearch = document.getElementById('tag-search-container'); if (tagSearch) tagSearch.classList.add('hidden');
+            document.getElementById('music-view').classList.remove('hidden');
+
+            const deskBtn = document.getElementById('music-nav-btn');
+            if (deskBtn) { deskBtn.classList.add('text-white', 'border-pride-red', 'bg-leather-900/50', 'shadow-inner'); deskBtn.classList.remove('text-chrome', 'border-transparent'); deskBtn.querySelector('i').classList.add('text-pride-red'); deskBtn.querySelector('i').classList.remove('text-chrome-dark'); }
+            const mobBtn = document.getElementById('music-nav-btn-mobile');
+            if (mobBtn) { mobBtn.classList.add('text-pride-red'); mobBtn.classList.remove('text-chrome'); }
+
+            if (!document.getElementById('music-results').innerHTML) {
+                document.getElementById('music-empty').classList.remove('hidden');
+            }
+            setTimeout(() => document.getElementById('music-search-input')?.focus(), 100);
+        }
+
+        function hideMusicView() {
+            const musicView = document.getElementById('music-view'); if (!musicView || musicView.classList.contains('hidden')) return;
+            musicView.classList.add('hidden');
+            document.getElementById('gallery-grid').classList.remove('hidden');
+            const tagSearch = document.getElementById('tag-search-container'); if (tagSearch) tagSearch.classList.remove('hidden');
+            const deskBtn = document.getElementById('music-nav-btn');
+            if (deskBtn) { deskBtn.classList.remove('text-white', 'border-pride-red', 'bg-leather-900/50', 'shadow-inner'); deskBtn.classList.add('text-chrome', 'border-transparent'); deskBtn.querySelector('i').classList.remove('text-pride-red'); deskBtn.querySelector('i').classList.add('text-chrome-dark'); }
+            const mobBtn = document.getElementById('music-nav-btn-mobile');
+            if (mobBtn) { mobBtn.classList.remove('text-pride-red'); mobBtn.classList.add('text-chrome'); }
+        }
+
+        function setMusicProvider(provider) {
+            musicProviderFilter = provider;
+            document.querySelectorAll('.music-provider-btn').forEach(btn => {
+                if (btn.dataset.provider === provider) { btn.classList.add('bg-leather-700', 'text-pride-red', 'metallic-edge'); btn.classList.remove('text-chrome-dark', 'hover:text-white'); }
+                else { btn.classList.remove('bg-leather-700', 'text-pride-red', 'metallic-edge'); btn.classList.add('text-chrome-dark', 'hover:text-white'); }
+            });
+            const input = document.getElementById('music-search-input');
+            if (input && input.value.trim()) searchMusic();
+        }
+
+        function musicCredentialsMissing() {
+            const missing = [];
+            if (musicProviderFilter !== 'soundcloud' && (!MUSIC_CONFIG.spotifyClientId || MUSIC_CONFIG.spotifyClientId.startsWith('TU_'))) missing.push('Spotify');
+            if (musicProviderFilter !== 'spotify' && (!MUSIC_CONFIG.soundcloudClientId || MUSIC_CONFIG.soundcloudClientId.startsWith('TU_'))) missing.push('SoundCloud');
+            return missing;
+        }
+
+        async function searchMusic() {
+            const input = document.getElementById('music-search-input');
+            const query = input ? input.value.trim() : '';
+            if (!query) { showToast('Escribe un término de búsqueda', true); return; }
+
+            const warning = document.getElementById('music-config-warning');
+            const missing = musicCredentialsMissing();
+            if (missing.length) {
+                document.getElementById('music-config-warning-text').textContent = `Configura MUSIC_CONFIG en el código con tus credenciales de ${missing.join(' y ')} para poder buscar.`;
+                warning.classList.remove('hidden');
+            } else { warning.classList.add('hidden'); }
+
+            const myToken = ++musicSearchToken;
+            document.getElementById('music-empty').classList.add('hidden');
+            document.getElementById('music-loading').classList.remove('hidden');
+            document.getElementById('music-results').innerHTML = '';
+
+            const jobs = [];
+            if (musicProviderFilter === 'all' || musicProviderFilter === 'spotify') jobs.push(searchSpotifyPlaylists(query));
+            if (musicProviderFilter === 'all' || musicProviderFilter === 'soundcloud') jobs.push(searchSoundCloudPlaylists(query));
+
+            const settled = await Promise.allSettled(jobs);
+            if (myToken !== musicSearchToken) return; // una búsqueda más nueva ya está en curso
+
+            let results = [];
+            settled.forEach(r => { if (r.status === 'fulfilled' && Array.isArray(r.value)) results = results.concat(r.value); });
+            settled.forEach(r => { if (r.status === 'rejected') console.error('Error buscando música:', r.reason); });
+
+            document.getElementById('music-loading').classList.add('hidden');
+            renderMusicResults(results);
+        }
+
+        async function getSpotifyToken() {
+            if (spotifyAccessToken && Date.now() < spotifyTokenExpiresAt) return spotifyAccessToken;
+            const basic = btoa(`${MUSIC_CONFIG.spotifyClientId}:${MUSIC_CONFIG.spotifyClientSecret}`);
+            const response = await fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${basic}` },
+                body: 'grant_type=client_credentials'
+            });
+            if (!response.ok) throw new Error('No se pudo autenticar con Spotify. Revisa MUSIC_CONFIG.');
+            const data = await response.json();
+            spotifyAccessToken = data.access_token;
+            spotifyTokenExpiresAt = Date.now() + (data.expires_in - 60) * 1000;
+            return spotifyAccessToken;
+        }
+
+        async function searchSpotifyPlaylists(query) {
+            if (!MUSIC_CONFIG.spotifyClientId || MUSIC_CONFIG.spotifyClientId.startsWith('TU_')) return [];
+            const token = await getSpotifyToken();
+            const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=playlist&limit=12`;
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('Fallo la búsqueda en Spotify.');
+            const data = await response.json();
+            const items = (data.playlists && data.playlists.items) ? data.playlists.items.filter(Boolean) : [];
+            return items.map(pl => ({
+                provider: 'spotify',
+                id: pl.id,
+                title: pl.name,
+                owner: pl.owner ? pl.owner.display_name : '',
+                trackCount: pl.tracks ? pl.tracks.total : null,
+                image: (pl.images && pl.images[0]) ? pl.images[0].url : null,
+                openUrl: pl.external_urls ? pl.external_urls.spotify : `https://open.spotify.com/playlist/${pl.id}`
+            }));
+        }
+
+        async function searchSoundCloudPlaylists(query) {
+            if (!MUSIC_CONFIG.soundcloudClientId || MUSIC_CONFIG.soundcloudClientId.startsWith('TU_')) return [];
+            const url = `https://api.soundcloud.com/playlists?q=${encodeURIComponent(query)}&client_id=${MUSIC_CONFIG.soundcloudClientId}&limit=12`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Fallo la búsqueda en SoundCloud.');
+            const data = await response.json();
+            const items = Array.isArray(data) ? data : [];
+            return items.map(pl => ({
+                provider: 'soundcloud',
+                id: pl.id,
+                title: pl.title,
+                owner: pl.user ? pl.user.username : '',
+                trackCount: typeof pl.track_count === 'number' ? pl.track_count : (pl.tracks ? pl.tracks.length : null),
+                image: pl.artwork_url || (pl.user ? pl.user.avatar_url : null),
+                openUrl: pl.permalink_url
+            }));
+        }
+
+        function renderMusicResults(results) {
+            const container = document.getElementById('music-results');
+            const emptyState = document.getElementById('music-empty');
+            if (!results.length) { container.innerHTML = ''; emptyState.classList.remove('hidden'); emptyState.querySelector('h3').textContent = 'Sin resultados'; emptyState.querySelector('p').textContent = 'Prueba con otro término de búsqueda.'; return; }
+            emptyState.classList.add('hidden');
+
+            container.innerHTML = results.map((item, index) => {
+                const providerIcon = item.provider === 'spotify' ? 'fa-brands fa-spotify' : 'fa-brands fa-soundcloud';
+                const providerColor = item.provider === 'spotify' ? 'text-[#1DB954]' : 'text-[#ff5500]';
+                const providerLabel = item.provider === 'spotify' ? 'Spotify' : 'SoundCloud';
+                const img = item.image || 'https://placehold.co/400x400/1a1a1a/c0c0c0?text=%E2%99%AA';
+                const meta = [item.owner, (item.trackCount !== null && item.trackCount !== undefined) ? `${item.trackCount} tracks` : null].filter(Boolean).join(' · ');
+                return `
+                    <div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer fade-in transition-all duration-300 hover:border-pride-red hover:-translate-y-1 shadow-lg relative" onclick="openMusicResult(${index})">
+                        <div class="aspect-square relative bg-leather-800 overflow-hidden">
+                            <img src="${img}" alt="${(item.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100 pointer-events-none" loading="lazy">
+                            <div class="absolute top-3 left-3 w-8 h-8 rounded-sm bg-black/80 backdrop-blur-sm flex items-center justify-center ${providerColor} shadow-lg pointer-events-none" title="${providerLabel}">
+                                <i class="${providerIcon}"></i>
+                            </div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent flex items-end p-4 pointer-events-none">
+                                <div>
+                                    <p class="text-white text-sm font-industrial uppercase tracking-wide truncate">${item.title || 'Sin título'}</p>
+                                    <p class="text-chrome-dark text-xs truncate">${meta}</p>
+                                </div>
+                            </div>
+                            <div class="absolute bottom-3 right-3 w-10 h-10 rounded-sm metallic-edge bg-pride-red hover:bg-red-700 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all shadow-[0_0_15px_rgba(229,0,0,0.5)] pointer-events-none">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            window.__musicResultsCache = results;
+        }
+
+        function openMusicResult(index) {
+            const item = (window.__musicResultsCache || [])[index]; if (!item) return;
+            if (item.provider === 'spotify') openSpotifyPlaylist(item.id, item.openUrl);
+            else openSoundCloudPlaylist(item.openUrl);
+        }
+
+        // Intenta abrir la app nativa (URI scheme); si no responde en poco tiempo, cae al enlace web.
+        function openSpotifyPlaylist(id, webUrl) {
+            const appUri = `spotify:playlist:${id}`;
+            const fallbackUrl = webUrl || `https://open.spotify.com/playlist/${id}`;
+            let didHide = false;
+            const onHide = () => { didHide = true; };
+            document.addEventListener('visibilitychange', onHide, { once: true });
+            window.location.href = appUri;
+            setTimeout(() => {
+                document.removeEventListener('visibilitychange', onHide);
+                if (!didHide) window.open(fallbackUrl, '_blank');
+            }, 1200);
+        }
+
+        function openSoundCloudPlaylist(webUrl) {
+            if (!webUrl) { showToast('No se encontró el enlace de la playlist', true); return; }
+            // SoundCloud maneja "universal links": abrir la URL web abre la app nativa automáticamente
+            // en iOS/Android si está instalada; en escritorio abre el reproductor web.
+            window.open(webUrl, '_blank');
+        }
+
         function clearAutoplayTimer() { if (autoplayTimer) { clearTimeout(autoplayTimer); autoplayTimer = null; } }
 
         function resetProgressBar() {
@@ -1359,6 +1631,7 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         async function openFolder(folderId, folderName) {
+            hideMusicView();
             isViewingPlaylistRoot = false; document.getElementById('error-state').classList.add('hidden'); document.getElementById('current-folder-title').textContent = "CARGANDO...";
             document.getElementById('gallery-grid').innerHTML = ''; 
             viewingPlaylistId = null; const playBtn = document.getElementById('play-playlist-btn'); if (playBtn) { playBtn.classList.add('hidden'); playBtn.classList.remove('flex'); }
