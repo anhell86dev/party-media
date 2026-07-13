@@ -180,6 +180,40 @@
             background: rgba(255,255,255,.02);
         }
         .vjs-small { color: var(--vjs-muted); font-size: 11px; font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 1px;}
+
+        /* Botones y texto más grandes/fáciles de tocar en móvil */
+        @media (max-width: 767px) {
+            #account-btn, #playlists-btn, #select-mode-btn, #lightbox-autoplay-btn {
+                min-height: 44px !important;
+                min-width: 44px !important;
+            }
+            #lightbox > button, #lightbox-cast-btn {
+                min-height: 48px !important;
+                min-width: 48px !important;
+            }
+            .filter-btn {
+                padding: 12px 16px !important;
+                font-size: 13px !important;
+            }
+            #mobile-folder-list button {
+                padding: 10px 8px !important;
+                min-height: 48px;
+            }
+            #mobile-folder-list i {
+                font-size: 22px !important;
+            }
+            #mobile-folder-list span {
+                font-size: 11px !important;
+                max-width: 76px !important;
+            }
+            .vjs-btn {
+                min-height: 44px !important;
+            }
+            #gallery-grid .group span,
+            #gallery-grid .group p {
+                font-size: 13px !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-leather-900 h-screen flex overflow-hidden text-gray-300 relative">
@@ -294,9 +328,6 @@
                     <span id="account-email" class="truncate font-industrial tracking-wider uppercase"></span>
                 </button>
 
-                <div class="h-10 w-10 bg-leather-800 rounded-sm flex items-center justify-center border border-leather-700 hover:bg-leather-700 transition-colors">
-                    <google-cast-launcher style="width: 24px; height: 24px; cursor: pointer; --connected-color: #e50000; --disconnected-color: #c0c0c0;"></google-cast-launcher>
-                </div>
                 <button id="playlists-btn" onclick="showPlaylistsView()" title="Mis Playlists" class="cursor-pointer h-10 w-10 bg-leather-800 rounded-sm flex items-center justify-center border border-leather-700 hover:bg-leather-700 transition-colors text-chrome hover:text-white">
                     <i class="fa-solid fa-list-ul text-sm pointer-events-none"></i>
                 </button>
@@ -377,9 +408,6 @@
             <i class="fa-solid fa-play text-sm pointer-events-none"></i>
           </button>
         </div>
-        <button id="lightbox-cast-btn" onclick="castCurrentMedia()" title="Enviar a TV" class="cursor-pointer text-chrome hover:text-white bg-leather-900 border border-leather-700 hover:border-chrome-dark w-10 h-10 flex items-center justify-center transition-all shadow-lg">
-          <i class="fa-solid fa-tv text-sm pointer-events-none"></i>
-        </button>
       </div>
       <div id="autoplay-progress-track" class="hidden absolute top-0 left-0 right-0 h-1 bg-leather-700 overflow-hidden z-20">
         <div id="autoplay-progress-bar" class="h-full bg-pride-red" style="width:0%"></div>
@@ -1268,6 +1296,7 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         function playCurrentPlaylist() { if (!viewingPlaylistId || currentFiles.length === 0) return; autoplayEnabled = true; showToast('REPRODUCCIÓN SECUENCIAL INICIADA'); openLightbox(0); }
+
         function clearAutoplayTimer() { if (autoplayTimer) { clearTimeout(autoplayTimer); autoplayTimer = null; } }
 
         function resetProgressBar() {
@@ -1435,6 +1464,22 @@ async function addSelectionToPlaylist(playlistId) {
             await revokeFilePublicAccess(fileId, permissionId);
         }
 
+        // El permiso "cualquiera con el enlace" que otorga makeFilePublic puede tardar unos segundos
+        // en propagarse en los servidores de Google. Si se pide el video de inmediato, Drive puede
+        // responder 403 en vez del contenido, y el navegador lo reporta como "formato no soportado".
+        // Este chequeo reintenta unas veces antes de entregarle la URL al reproductor.
+        async function waitForStreamReady(url, attempts = 5, delayMs = 700) {
+            for (let i = 0; i < attempts; i++) {
+                try {
+                    const res = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-0' } });
+                    if (res.ok || res.status === 206) return { success: true };
+                    if (res.status !== 403 && res.status !== 404) return { success: false, status: res.status };
+                } catch (e) { /* red momentánea, reintenta */ }
+                await new Promise(r => setTimeout(r, delayMs));
+            }
+            return { success: false, status: 403 };
+        }
+
         function loadVideoSource(media, setStatus, onReady, onProgress) {
             setStatus('PREPARANDO...');
             ensureDriveAuth(async () => {
@@ -1445,6 +1490,16 @@ async function addSelectionToPlaylist(playlistId) {
 
                     if (!vjsPlayer) return;
                     const streamUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`;
+
+                    setStatus('VERIFICANDO ACCESO...');
+                    const ready = await waitForStreamReady(streamUrl);
+                    if (!vjsPlayer) return;
+                    if (!ready.success) {
+                        setStatus('ERROR AL CARGAR');
+                        showToast(`No se pudo acceder al video (HTTP ${ready.status || '?'}). Revisa los permisos de la carpeta en Drive.`, true);
+                        return;
+                    }
+
                     vjsPlayer.src({ src: streamUrl, type: media.mimeType || 'video/mp4' });
                     setStatus('CARGANDO...');
 
@@ -1454,8 +1509,9 @@ async function addSelectionToPlaylist(playlistId) {
                         if (autoplayEnabled) { vjsPlayer.play(); }
                     });
                     vjsPlayer.one('error', () => {
+                        const err = vjsPlayer.error();
                         setStatus('ERROR AL CARGAR');
-                        showToast('No se pudo cargar el video', true);
+                        showToast(err && err.message ? err.message : 'No se pudo cargar el video', true);
                     });
                     if (onProgress) {
                         vjsPlayer.on('progress', () => {
