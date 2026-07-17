@@ -309,7 +309,7 @@
     </nav>
 
     <main class="flex-1 flex flex-col h-full bg-transparent relative overflow-hidden">
-        <header class="bg-leather-900/90 backdrop-blur-md border-b border-leather-700 px-4 sm:px-8 py-3 sm:py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center sticky top-0 z-10 shadow-sm gap-3 sm:gap-4">
+        <header class="bg-leather-900/90 backdrop-blur-md border-b border-leather-700 px-4 sm:px-8 py-3 sm:py-5 flex flex-col sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sticky top-0 z-10 shadow-sm gap-3 sm:gap-4">
             <div>
                 <div class="flex items-center gap-3 flex-wrap">
                     <h2 class="text-2xl font-industrial uppercase tracking-wide text-white" id="current-folder-title">Iniciando...</h2>
@@ -321,8 +321,16 @@
                     <!-- Se llena con JS -->
                 </div>
             </div>
+
+            <div class="flex justify-center">
+                <div class="flex bg-leather-800 p-1 rounded-sm border border-leather-700 font-industrial tracking-wider uppercase">
+                    <button onclick="setFilter('all')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm bg-leather-700 shadow-sm text-pride-red transition-colors metallic-edge" data-filter="all">Todos</button>
+                    <button onclick="setFilter('image')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="image">Fotos</button>
+                    <button onclick="setFilter('video')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="video">Videos</button>
+                </div>
+            </div>
             
-            <div class="flex items-center flex-wrap gap-2 sm:gap-4 sm:space-x-0">
+            <div class="flex items-center flex-wrap gap-2 sm:gap-4 sm:space-x-0 sm:justify-end">
                 <button id="account-btn" onclick="logout()" title="Cerrar sesión" class="cursor-pointer h-10 px-3 bg-leather-800 rounded-sm flex items-center gap-2 border border-leather-700 hover:bg-pride-red/20 hover:border-pride-red transition-colors text-chrome hover:text-white text-xs font-medium max-w-[140px]">
                     <i class="fa-solid fa-circle-user text-chrome"></i>
                     <span id="account-email" class="truncate font-industrial tracking-wider uppercase"></span>
@@ -341,12 +349,6 @@
                     <button onclick="setViewMode('large')" class="cursor-pointer view-btn w-8 h-8 flex items-center justify-center rounded-sm text-chrome-dark hover:text-white transition-colors" data-view="large" title="Grandes"><i class="fa-solid fa-border-all text-lg"></i></button>
                     <div class="w-px h-4 bg-leather-700 mx-1"></div>
                     <button onclick="setViewMode('list')" class="cursor-pointer view-btn w-8 h-8 flex items-center justify-center rounded-sm text-chrome-dark hover:text-white transition-colors" data-view="list" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
-                </div>
-
-                <div class="flex bg-leather-800 p-1 rounded-sm border border-leather-700 font-industrial tracking-wider uppercase">
-                    <button onclick="setFilter('all')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm bg-leather-700 shadow-sm text-pride-red transition-colors metallic-edge" data-filter="all">Todos</button>
-                    <button onclick="setFilter('image')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="image">Fotos</button>
-                    <button onclick="setFilter('video')" class="cursor-pointer filter-btn px-3 sm:px-4 py-1 text-xs sm:text-sm rounded-sm text-chrome-dark hover:text-white transition-colors" data-filter="video">Videos</button>
                 </div>
             </div>
         </header>
@@ -491,8 +493,10 @@
         let vjsPlayer = null; 
 
         async function fetchFromDrive(query, fields) {
+            const token = await getAccessTokenAsync();
             const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&key=${DRIVE_CONFIG.apiKey}&fields=${encodeURIComponent(fields)}&includeItemsFromAllDrives=true&supportsAllDrives=true`;
-            const response = await fetch(url);
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (response.status === 401) { handleAuthExpired(); throw new Error('Sesión de Google caducada, reintenta'); }
             if (!response.ok) throw new Error('Error al conectar con Google Drive');
             const data = await response.json(); return data.files;
         }
@@ -1026,8 +1030,9 @@ async function addSelectionToPlaylist(playlistId) {
             document.getElementById('login-screen').classList.remove('flex'); document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-shell').classList.remove('hidden'); document.getElementById('app-shell').classList.add('flex');
             document.getElementById('account-email').textContent = email.split('@')[0];
-            requestDriveAccessOnLogin();
-            loadPlaylists(); initApp(); if (showWelcomeToast) showToast('ACCESO CONCEDIDO');
+            loadPlaylists();
+            requestDriveAccessOnLogin(() => initApp());
+            if (showWelcomeToast) showToast('ACCESO CONCEDIDO');
         }
 
         function logout() {
@@ -1072,12 +1077,24 @@ async function addSelectionToPlaylist(playlistId) {
             });
         }
         function ensureDriveAuth(action) { if (accessToken) { action(); return; } if (!tokenClient) { showToast('Módulo no listo, reintenta', true); return; } pendingAuthAction = action; tokenClient.requestAccessToken({ prompt: '' }); }
+        function getAccessTokenAsync(retries = 20) {
+            return new Promise((resolve, reject) => {
+                if (accessToken) { resolve(accessToken); return; }
+                if (!tokenClient) {
+                    if (retries <= 0) { reject(new Error('Módulo de autenticación no listo, reintenta')); return; }
+                    setTimeout(() => getAccessTokenAsync(retries - 1).then(resolve, reject), 300);
+                    return;
+                }
+                pendingAuthAction = () => resolve(accessToken);
+                tokenClient.requestAccessToken({ prompt: '' });
+            });
+        }
         function handleAuthExpired() { accessToken = null; accessTokenExpiresAt = null; if (tokenRefreshTimer) { clearTimeout(tokenRefreshTimer); tokenRefreshTimer = null; } showToast('Sesión caducada, reintenta', true); }
 
-        function requestDriveAccessOnLogin(retries = 20) {
-            if (accessToken) return;
-            if (!tokenClient) { if (retries <= 0) return; setTimeout(() => requestDriveAccessOnLogin(retries - 1), 300); return; }
-            ensureDriveAuth(() => {});
+        function requestDriveAccessOnLogin(callback, retries = 20) {
+            if (accessToken) { if (callback) callback(); return; }
+            if (!tokenClient) { if (retries <= 0) { if (callback) callback(); return; } setTimeout(() => requestDriveAccessOnLogin(callback, retries - 1), 300); return; }
+            ensureDriveAuth(() => { if (callback) callback(); });
         }
 
         function requestDeleteMedia(index) { const arr = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); openConfirmDelete(arr[index]); }
@@ -1451,56 +1468,60 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         let currentVideoBlobUrl = null;
-        let activeLocalVideoPermission = null; // { fileId, permissionId }
 
         function revokeCurrentVideoBlobUrl() {
             if (currentVideoBlobUrl) { URL.revokeObjectURL(currentVideoBlobUrl); currentVideoBlobUrl = null; }
         }
 
-        async function releaseLocalVideoPermission() {
-            if (!activeLocalVideoPermission) return;
-            const { fileId, permissionId } = activeLocalVideoPermission;
-            activeLocalVideoPermission = null;
-            await revokeFilePublicAccess(fileId, permissionId);
-        }
-
-        // El permiso "cualquiera con el enlace" que otorga makeFilePublic puede tardar unos segundos
-        // en propagarse en los servidores de Google. Si se pide el video de inmediato, Drive puede
-        // responder 403 en vez del contenido, y el navegador lo reporta como "formato no soportado".
-        // Este chequeo reintenta unas veces antes de entregarle la URL al reproductor.
-        async function waitForStreamReady(url, attempts = 5, delayMs = 700) {
-            for (let i = 0; i < attempts; i++) {
-                try {
-                    const res = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-0' } });
-                    if (res.ok || res.status === 206) return { success: true };
-                    if (res.status !== 403 && res.status !== 404) return { success: false, status: res.status };
-                } catch (e) { /* red momentánea, reintenta */ }
-                await new Promise(r => setTimeout(r, delayMs));
-            }
-            return { success: false, status: 403 };
-        }
-
+        // Ya no se comparte el archivo públicamente para verlo en el navegador: se descarga con tu
+        // token de Google (autenticado) y se reproduce desde un blob local. Nota: a diferencia del
+        // streaming progresivo, el video debe descargarse completo antes de poder reproducirse — en
+        // archivos muy grandes puede tardar un poco más en arrancar. El único caso que sigue
+        // necesitando compartir el archivo (brevemente, y solo ese archivo) es el Cast a Chromecast,
+        // porque la TV no tiene forma de autenticarse con tu cuenta de Google.
         function loadVideoSource(media, setStatus, onReady, onProgress) {
             setStatus('PREPARANDO...');
             ensureDriveAuth(async () => {
                 try {
-                    await releaseLocalVideoPermission();
-                    const permissionId = await makeFilePublic(media.id);
-                    activeLocalVideoPermission = { fileId: media.id, permissionId };
-
+                    revokeCurrentVideoBlobUrl();
                     if (!vjsPlayer) return;
-                    const streamUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`;
 
-                    setStatus('VERIFICANDO ACCESO...');
-                    const ready = await waitForStreamReady(streamUrl);
-                    if (!vjsPlayer) return;
-                    if (!ready.success) {
+                    setStatus('DESCARGANDO...');
+                    const streamUrl = `https://www.googleapis.com/drive/v3/files/${media.id}?alt=media&acknowledgeAbuse=true`;
+                    const response = await fetch(streamUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+
+                    if (response.status === 401) {
+                        handleAuthExpired();
                         setStatus('ERROR AL CARGAR');
-                        showToast(`No se pudo acceder al video (HTTP ${ready.status || '?'}). Revisa los permisos de la carpeta en Drive.`, true);
+                        showToast('Sesión de Google caducada, reintenta', true);
+                        return;
+                    }
+                    if (!response.ok) {
+                        setStatus('ERROR AL CARGAR');
+                        showToast(`No se pudo acceder al video (HTTP ${response.status})`, true);
                         return;
                     }
 
-                    vjsPlayer.src({ src: streamUrl, type: media.mimeType || 'video/mp4' });
+                    let blob;
+                    if (response.body && response.body.getReader) {
+                        const total = parseInt(response.headers.get('Content-Length') || '0', 10);
+                        const reader = response.body.getReader();
+                        const chunks = []; let loaded = 0;
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            chunks.push(value); loaded += value.length;
+                            if (onProgress && total) onProgress(Math.min(100, Math.round((loaded / total) * 100)));
+                        }
+                        blob = new Blob(chunks, { type: media.mimeType || 'video/mp4' });
+                    } else {
+                        blob = await response.blob();
+                        if (onProgress) onProgress(100);
+                    }
+                    if (!vjsPlayer) return;
+
+                    currentVideoBlobUrl = URL.createObjectURL(blob);
+                    vjsPlayer.src({ src: currentVideoBlobUrl, type: media.mimeType || 'video/mp4' });
                     setStatus('CARGANDO...');
 
                     vjsPlayer.one('canplay', () => {
@@ -1513,15 +1534,11 @@ async function addSelectionToPlaylist(playlistId) {
                         setStatus('ERROR AL CARGAR');
                         showToast(err && err.message ? err.message : 'No se pudo cargar el video', true);
                     });
-                    if (onProgress) {
-                        vjsPlayer.on('progress', () => {
-                            try { onProgress(Math.round((vjsPlayer.bufferedPercent() || 0) * 100)); } catch (e) { /* no-op */ }
-                        });
-                    }
                 } catch (err) {
                     console.error('Error al preparar video:', err);
                     setStatus('ERROR AL CARGAR');
                     showToast('No se pudo preparar el video', true);
+
                 }
             });
         }
@@ -1533,15 +1550,21 @@ async function addSelectionToPlaylist(playlistId) {
             
             if (vjsPlayer) { vjsPlayer.dispose(); vjsPlayer = null; }
             revokeCurrentVideoBlobUrl();
-            releaseLocalVideoPermission();
 
             contentContainer.innerHTML = '<div id="media-wrapper" class="w-full h-full flex items-center justify-center"></div>';
             const wrapper = document.getElementById('media-wrapper');
 
             if (media.type === 'image') { 
                 const hqImg = media.thumbnail.replace('=s600', '=s2000'); 
-                wrapper.innerHTML = `<img src="${hqImg}" class="max-w-full max-h-[85vh] object-contain rounded-sm metallic-edge shadow-[0_20px_50px_rgba(0,0,0,0.8)] fade-in" alt="${media.name}">`; 
+                wrapper.innerHTML = `
+                    <div class="relative max-w-full max-h-[85vh] fade-in">
+                        <img src="${hqImg}" class="max-w-full max-h-[85vh] object-contain rounded-sm metallic-edge shadow-[0_20px_50px_rgba(0,0,0,0.8)]" alt="${media.name}">
+                        <button id="lightbox-cast-btn" onclick="castCurrentMedia()" title="Enviar a TV" class="cursor-pointer text-chrome hover:text-white bg-leather-900 border border-leather-700 hover:border-chrome-dark w-10 h-10 flex items-center justify-center transition-all shadow-lg absolute bottom-3 right-3">
+                            <i class="fa-brands fa-chromecast text-sm pointer-events-none"></i>
+                        </button>
+                    </div>`; 
                 scheduleAutoAdvance(media); 
+                if (activeCastSession) updateCastButtonState('SESSION_STARTED');
             } 
             else if (media.type === 'video') { 
                 clearAutoplayTimer(); resetProgressBar();
@@ -1647,7 +1670,6 @@ async function addSelectionToPlaylist(playlistId) {
                 lightbox.classList.add('hidden'); 
                 if (vjsPlayer) { vjsPlayer.dispose(); vjsPlayer = null; } 
                 revokeCurrentVideoBlobUrl();
-                releaseLocalVideoPermission();
                 document.getElementById('lightbox-content').innerHTML = ''; 
                 document.body.style.overflow = 'auto'; 
             }, 300); 
