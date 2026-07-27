@@ -316,6 +316,9 @@
                     <button id="play-playlist-btn" onclick="playCurrentPlaylist()" class="cursor-pointer hidden items-center gap-2 bg-pride-red hover:bg-red-700 text-white font-industrial tracking-wider uppercase text-sm px-4 py-2 rounded-sm transition-colors metallic-edge shadow-lg shadow-pride-red/20">
                         <i class="fa-solid fa-play text-sm pointer-events-none"></i> <span class="pointer-events-none">Watch Playlist</span>
                     </button>
+                    <button id="add-media-to-playlist-btn" onclick="openMediaPickerModal()" title="Agregar fotos/videos" class="cursor-pointer hidden items-center justify-center w-9 h-9 bg-leather-800 hover:bg-leather-700 border border-leather-700 hover:border-pride-red rounded-sm transition-colors text-chrome hover:text-white">
+                        <i class="fa-solid fa-plus text-sm pointer-events-none"></i>
+                    </button>
                 </div>
                 <div id="breadcrumbs" class="flex items-center flex-wrap text-sm text-chrome mt-1 gap-1">
                     <!-- Se llena con JS -->
@@ -483,6 +486,28 @@
             </div>
             <div id="add-to-playlist-list" class="space-y-3 overflow-y-auto flex-1 pr-2">
                 <!-- Se llena con JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: AGREGAR FOTOS/VIDEOS A LA PLAYLIST ACTUAL (ventana flotante con selector de archivos) -->
+    <div id="media-picker-modal" class="fixed inset-0 z-[220] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-leather-800 metallic-edge rounded-sm max-w-3xl w-full p-0 shadow-2xl fade-in max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between p-5 border-b border-leather-700">
+                <div>
+                    <h3 class="text-xl font-industrial uppercase tracking-wider text-white">Agregar Fotos/Videos</h3>
+                    <div id="picker-breadcrumbs" class="flex items-center flex-wrap text-xs text-chrome mt-1 gap-1"></div>
+                </div>
+                <button onclick="closeMediaPickerModal()" class="cursor-pointer text-chrome hover:text-white w-9 h-9 rounded-sm flex items-center justify-center hover:bg-leather-700 transition-colors flex-shrink-0"><i class="fa-solid fa-xmark text-lg pointer-events-none"></i></button>
+            </div>
+            <div id="picker-grid" class="flex-1 overflow-y-auto p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Se llena con JS -->
+            </div>
+            <div class="flex items-center justify-between p-4 border-t border-leather-700 bg-leather-900/50">
+                <span id="picker-selection-count" class="text-chrome text-sm font-industrial uppercase tracking-widest"><span class="text-pride-red">0</span> seleccionados</span>
+                <button onclick="confirmAddPickedMedia()" class="cursor-pointer select-none bg-pride-red hover:bg-red-700 metallic-edge text-white font-industrial uppercase tracking-widest text-sm px-6 py-2.5 rounded-sm transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-plus text-sm pointer-events-none"></i> Agregar a la Playlist
+                </button>
             </div>
         </div>
     </div>
@@ -1175,6 +1200,7 @@ async function addSelectionToPlaylist(playlistId) {
             isViewingPlaylistRoot = true;
             document.getElementById('error-state').classList.add('hidden'); document.getElementById('current-folder-title').textContent = "MIS PLAYLISTS";
             const playBtn = document.getElementById('play-playlist-btn'); if (playBtn) { playBtn.classList.add('hidden'); playBtn.classList.remove('flex'); }
+            const addBtn0 = document.getElementById('add-media-to-playlist-btn'); if (addBtn0) { addBtn0.classList.add('hidden'); addBtn0.classList.remove('flex'); }
             viewingPlaylistId = null; currentFolders = []; currentFiles = [];
             breadcrumbs = [{ id: 'playlists_root', name: 'Mis Playlists' }];
             document.getElementById('breadcrumbs').innerHTML = `<span class="text-pride-red font-industrial tracking-wider uppercase">Mis Playlists</span>`;
@@ -1276,6 +1302,7 @@ async function addSelectionToPlaylist(playlistId) {
             viewingPlaylistId = id; currentFolders = []; currentFiles = (pl.items || []).map(buildMediaFromRef);
             document.getElementById('current-folder-title').textContent = pl.name;
             const playBtn = document.getElementById('play-playlist-btn'); playBtn.classList.remove('hidden'); playBtn.classList.add('flex');
+            const addBtn = document.getElementById('add-media-to-playlist-btn'); if (addBtn) { addBtn.classList.remove('hidden'); addBtn.classList.add('flex'); }
             document.getElementById('breadcrumbs').innerHTML = `
                 <span onclick="showPlaylistsView()" class="hover:text-white cursor-pointer transition-colors font-industrial tracking-wider uppercase">Mis Playlists</span>
                 <i class="fa-solid fa-chevron-right text-[10px] mx-2 text-chrome-dark"></i>
@@ -1287,6 +1314,7 @@ async function addSelectionToPlaylist(playlistId) {
         function exitPlaylistView() {
             viewingPlaylistId = null; const playBtn = document.getElementById('play-playlist-btn');
             if(playBtn) { playBtn.classList.add('hidden'); playBtn.classList.remove('flex'); }
+            const addBtn2 = document.getElementById('add-media-to-playlist-btn'); if (addBtn2) { addBtn2.classList.add('hidden'); addBtn2.classList.remove('flex'); }
             breadcrumbs = []; openFolder(DRIVE_CONFIG.mainFolderId, 'Base');
         }
 
@@ -1294,6 +1322,107 @@ async function addSelectionToPlaylist(playlistId) {
             if (!viewingPlaylistId) return; const pl = playlists[viewingPlaylistId]; if (!pl || !pl.items) return;
             pl.items = pl.items.filter(i => i.id !== mediaId); savePlaylists(); currentFiles = pl.items.map(buildMediaFromRef);
             renderGrid(); showToast('REMOVIDO');
+        }
+
+        /* ===================== SELECTOR DE MEDIOS PARA AGREGAR A LA PLAYLIST ===================== */
+        let pickerBreadcrumbs = []; let pickerFolders = []; let pickerFiles = []; let pickerSelectedIds = new Set();
+
+        function openMediaPickerModal() {
+            if (!viewingPlaylistId) return;
+            pickerSelectedIds.clear(); pickerBreadcrumbs = [];
+            const modal = document.getElementById('media-picker-modal');
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+            pickerOpenFolder(DRIVE_CONFIG.mainFolderId, 'Base');
+        }
+
+        function closeMediaPickerModal() {
+            const modal = document.getElementById('media-picker-modal');
+            modal.classList.add('hidden'); modal.classList.remove('flex');
+        }
+
+        async function pickerOpenFolder(folderId, folderName) {
+            const pathIndex = pickerBreadcrumbs.findIndex(b => b.id === folderId);
+            if (pathIndex !== -1) { pickerBreadcrumbs = pickerBreadcrumbs.slice(0, pathIndex + 1); } else { pickerBreadcrumbs.push({ id: folderId, name: folderName }); }
+            renderPickerBreadcrumbs();
+            const grid = document.getElementById('picker-grid');
+            grid.innerHTML = '<p class="col-span-full text-center text-chrome-dark text-sm py-8 font-industrial uppercase tracking-widest">Cargando...</p>';
+            try {
+                const query = `'${folderId}' in parents and trashed=false`;
+                const items = await fetchFromDrive(query, 'files(id, name, mimeType, thumbnailLink, videoMediaMetadata)');
+                pickerFolders = items.filter(f => f.mimeType === 'application/vnd.google-apps.folder').map(f => ({ id: f.id, name: f.name }));
+                pickerFiles = items.filter(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/')).map(f => {
+                    const isVideo = f.mimeType.startsWith('video/');
+                    const thumb = f.thumbnailLink ? f.thumbnailLink.replace('=s220', '=s600') : 'https://placehold.co/400x300/1a1a1a/c0c0c0?text=SIN+VISTA';
+                    return { id: f.id, type: isVideo ? 'video' : 'image', mimeType: f.mimeType, name: f.name, durationMs: (isVideo && f.videoMediaMetadata && f.videoMediaMetadata.durationMillis) ? parseInt(f.videoMediaMetadata.durationMillis, 10) : null, thumbnail: thumb };
+                });
+                renderPickerGrid();
+            } catch (e) {
+                grid.innerHTML = '<p class="col-span-full text-center text-pride-red text-sm py-8 font-industrial uppercase tracking-widest">No se pudo cargar esta carpeta.</p>';
+            }
+        }
+
+        function renderPickerBreadcrumbs() {
+            const container = document.getElementById('picker-breadcrumbs'); container.innerHTML = '';
+            pickerBreadcrumbs.forEach((crumb, index) => {
+                if (index < pickerBreadcrumbs.length - 1) { container.innerHTML += `<span onclick="pickerOpenFolder('${crumb.id}', '${crumb.name.replace(/'/g, "\\'")}')" class="cursor-pointer hover:text-white transition-colors font-industrial tracking-wider uppercase">${crumb.name}</span><i class="fa-solid fa-chevron-right text-[10px] mx-2 text-chrome-dark"></i>`; }
+                else { container.innerHTML += `<span class="text-pride-red font-industrial tracking-wider uppercase">${crumb.name}</span>`; }
+            });
+        }
+
+        function renderPickerGrid() {
+            const grid = document.getElementById('picker-grid');
+            const pl = playlists[viewingPlaylistId];
+            const alreadyInPlaylist = new Set(pl && pl.items ? pl.items.map(i => i.id) : []);
+
+            if (pickerFolders.length === 0 && pickerFiles.length === 0) {
+                grid.innerHTML = '<p class="col-span-full text-center text-chrome-dark text-sm py-8 font-industrial uppercase tracking-widest">Carpeta vacía.</p>';
+                return;
+            }
+
+            let html = '';
+            pickerFolders.forEach(folder => {
+                html += `<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none transition-all hover:border-pride-red" onclick="pickerOpenFolder('${folder.id}', '${folder.name.replace(/'/g, "\\'")}')"><div class="aspect-square flex flex-col items-center justify-center p-3"><i class="fa-solid fa-folder text-4xl text-chrome group-hover:text-pride-red transition-colors mb-2 pointer-events-none"></i><span class="text-chrome font-industrial uppercase tracking-wider text-center text-xs truncate w-full px-1 group-hover:text-white pointer-events-none">${folder.name}</span></div></div>`;
+            });
+            pickerFiles.forEach(media => {
+                const isVideo = media.type === 'video';
+                const already = alreadyInPlaylist.has(media.id);
+                const isSelected = pickerSelectedIds.has(media.id);
+                const badge = already
+                    ? `<div class="absolute top-2 left-2 w-7 h-7 rounded-sm bg-leather-700 border border-leather-600 flex items-center justify-center text-chrome-dark z-10 pointer-events-none" title="Ya está en la playlist"><i class="fa-solid fa-check text-xs"></i></div>`
+                    : `<div class="absolute top-2 left-2 w-7 h-7 rounded-sm metallic-edge flex items-center justify-center z-10 transition-colors pointer-events-none ${isSelected ? 'bg-pride-red' : 'bg-black/60'}">${isSelected ? '<i class="fa-solid fa-check text-white text-xs"></i>' : ''}</div>`;
+                const clickAction = already ? '' : `onclick="pickerToggleSelect('${media.id}')"`;
+                const typeIcon = isVideo ? '<i class="fa-solid fa-video absolute bottom-2 right-2 text-white text-xs drop-shadow pointer-events-none"></i>' : '';
+                html += `<div class="group relative bg-leather-900 metallic-edge rounded-sm overflow-hidden select-none transition-all ${already ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-pride-red'} ${isSelected ? 'border-pride-red shadow-[0_0_12px_rgba(229,0,0,0.3)]' : ''}" ${clickAction}><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy">${badge}${typeIcon}</div></div>`;
+            });
+            grid.innerHTML = html;
+            updatePickerSelectionCount();
+        }
+
+        function pickerToggleSelect(id) {
+            pickerSelectedIds.has(id) ? pickerSelectedIds.delete(id) : pickerSelectedIds.add(id);
+            renderPickerGrid();
+        }
+
+        function updatePickerSelectionCount() {
+            const el = document.getElementById('picker-selection-count');
+            if (el) el.innerHTML = `<span class="text-pride-red">${pickerSelectedIds.size}</span> seleccionados`;
+        }
+
+        function confirmAddPickedMedia() {
+            if (!viewingPlaylistId || pickerSelectedIds.size === 0) { showToast('Selecciona al menos un archivo', true); return; }
+            const pl = playlists[viewingPlaylistId]; if (!pl) return; if (!pl.items) pl.items = [];
+            const existingIds = new Set(pl.items.map(i => i.id));
+            let added = 0;
+            pickerFiles.filter(m => pickerSelectedIds.has(m.id)).forEach(m => {
+                if (!existingIds.has(m.id)) {
+                    pl.items.push({ id: m.id, name: m.name, type: m.type, mimeType: m.mimeType, durationMs: m.durationMs || null });
+                    existingIds.add(m.id); added++;
+                }
+            });
+            savePlaylists();
+            closeMediaPickerModal();
+            if (viewingPlaylistId) { currentFiles = pl.items.map(buildMediaFromRef); renderGrid(); }
+            showToast(added > 0 ? `${added} ITEM${added === 1 ? '' : 'S'} AGREGADO${added === 1 ? '' : 'S'}` : 'YA ESTABAN EN LA PLAYLIST');
         }
 
         function toggleSelectionMode() {
@@ -1391,6 +1520,7 @@ async function addSelectionToPlaylist(playlistId) {
             isViewingPlaylistRoot = false; document.getElementById('error-state').classList.add('hidden'); document.getElementById('current-folder-title').textContent = "CARGANDO...";
             document.getElementById('gallery-grid').innerHTML = ''; 
             viewingPlaylistId = null; const playBtn = document.getElementById('play-playlist-btn'); if (playBtn) { playBtn.classList.add('hidden'); playBtn.classList.remove('flex'); }
+            const addBtn3 = document.getElementById('add-media-to-playlist-btn'); if (addBtn3) { addBtn3.classList.add('hidden'); addBtn3.classList.remove('flex'); }
             const pathIndex = breadcrumbs.findIndex(b => b.id === folderId);
             if (pathIndex !== -1) { breadcrumbs = breadcrumbs.slice(0, pathIndex + 1); } else { breadcrumbs.push({ id: folderId, name: folderName }); }
             renderBreadcrumbs();
