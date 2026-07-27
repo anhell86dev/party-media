@@ -183,7 +183,7 @@
 
         /* Botones y texto más grandes/fáciles de tocar en móvil */
         @media (max-width: 767px) {
-            #account-btn, #playlists-btn, #select-mode-btn, #lightbox-autoplay-btn, .sort-select {
+            #account-btn, #playlists-btn, #lightbox-autoplay-btn, .sort-select {
                 min-height: 44px !important;
                 min-width: 44px !important;
             }
@@ -342,10 +342,6 @@
                 <button id="playlists-btn" onclick="showPlaylistsView()" title="Mis Playlists" class="cursor-pointer h-10 w-10 bg-leather-800 rounded-sm flex items-center justify-center border border-leather-700 hover:bg-leather-700 transition-colors text-chrome hover:text-white">
                     <i class="fa-solid fa-list-ul text-sm pointer-events-none"></i>
                 </button>
-                <button id="select-mode-btn" onclick="toggleSelectionMode()" title="Seleccionar archivos" class="cursor-pointer h-10 w-10 bg-leather-800 rounded-sm flex items-center justify-center border border-leather-700 hover:bg-leather-700 transition-colors text-chrome hover:text-white">
-                    <i class="fa-solid fa-check-double text-sm pointer-events-none"></i>
-                </button>
-
                 <div class="relative">
                     <i class="fa-solid fa-arrow-down-wide-short absolute left-3 top-1/2 -translate-y-1/2 text-chrome-dark text-xs pointer-events-none"></i>
                     <select onchange="setSort(this.value)" title="Ordenar por" class="sort-select cursor-pointer h-10 pl-8 pr-3 bg-leather-800 rounded-sm border border-leather-700 hover:bg-leather-700 transition-colors text-chrome hover:text-white text-xs font-industrial uppercase tracking-widest appearance-none focus:outline-none focus:ring-1 focus:ring-pride-red">
@@ -1157,6 +1153,27 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         let playlists = {}; let viewingPlaylistId = null; let selectionMode = false; let selectedIds = new Set();
+        let longPressTimer = null; let longPressTriggered = false; const LONG_PRESS_MS = 3000;
+
+        function startLongPress(id) {
+            longPressTriggered = false;
+            clearTimeout(longPressTimer);
+            longPressTimer = setTimeout(() => {
+                longPressTriggered = true;
+                if (!selectionMode) { selectionMode = true; selectedIds.clear(); }
+                selectedIds.add(id);
+                if (navigator.vibrate) navigator.vibrate(30);
+                updateSelectionBar();
+                renderGrid();
+            }, LONG_PRESS_MS);
+        }
+
+        function cancelLongPress() { clearTimeout(longPressTimer); }
+
+        function handleItemClick(id, index) {
+            if (longPressTriggered) { longPressTriggered = false; return; }
+            if (selectionMode) toggleSelectItem(id); else openLightbox(index);
+        }
         let autoplayEnabled = false; let autoplayTimer = null; let photoDurationMs = 5000; const DEFAULT_VIDEO_DURATION_MS = 15000; 
 
         function loadPlaylists() { try { playlists = JSON.parse(localStorage.getItem('partyMediaPlaylists')) || {}; } catch(e) { playlists = {}; } }
@@ -1610,18 +1627,19 @@ async function addSelectionToPlaylist(playlistId) {
             });
 
             displayFiles.forEach((media, index) => {
-                const isVideo = media.type === 'video'; const isSelected = selectedIds.has(media.id); const clickAction = selectionMode ? `toggleSelectItem('${media.id}')` : `openLightbox(${index})`;
+                const isVideo = media.type === 'video'; const isSelected = selectedIds.has(media.id);
+                const pressHandlers = `onmousedown="startLongPress('${media.id}')" onmouseup="cancelLongPress()" onmouseleave="cancelLongPress()" ontouchstart="startLongPress('${media.id}')" ontouchend="cancelLongPress()" ontouchmove="cancelLongPress()" onclick="handleItemClick('${media.id}', ${index})"`;
                 if (currentViewMode === 'list') {
                     const typeIcon = isVideo ? '<i class="fa-solid fa-video text-xs text-white"></i>' : '<i class="fa-solid fa-image text-xs text-white"></i>';
                     const checkboxHtml = selectionMode ? `<div class="w-6 h-6 rounded-sm metallic-edge flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${isSelected ? 'bg-pride-red' : 'bg-leather-800'}">${isSelected ? '<i class="fa-solid fa-check text-white text-[10px]"></i>' : ''}</div>` : '';
                     const actionBtnHtml = selectionMode ? '' : (viewingPlaylistId ? `<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>` : `<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer w-10 h-10 rounded-sm metallic-edge flex items-center justify-center text-chrome hover:bg-pride-red hover:text-white opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all flex-shrink-0 ml-2"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`);
-                    gridContainer.innerHTML += `<div class="group flex items-center bg-leather-900 metallic-edge ${isSelected ? 'border-pride-red shadow-[0_0_10px_rgba(229,0,0,0.2)]' : ''} hover:border-chrome rounded-sm p-3 cursor-pointer select-none transition-all fade-in" onclick="${clickAction}">${checkboxHtml}<div class="w-20 h-14 flex-shrink-0 relative rounded-sm metallic-edge overflow-hidden mr-5 bg-leather-800"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy"><div class="absolute inset-0 flex items-center justify-center bg-black/60 group-hover:bg-black/20 transition-colors pointer-events-none">${typeIcon}</div></div><span class="text-chrome font-medium group-hover:text-white truncate flex-1 tracking-wide pointer-events-none">${media.name}</span>${actionBtnHtml}</div>`;
+                    gridContainer.innerHTML += `<div class="group flex items-center bg-leather-900 metallic-edge ${isSelected ? 'border-pride-red shadow-[0_0_10px_rgba(229,0,0,0.2)]' : ''} hover:border-chrome rounded-sm p-3 cursor-pointer select-none transition-all fade-in" ${pressHandlers}>${checkboxHtml}<div class="w-20 h-14 flex-shrink-0 relative rounded-sm metallic-edge overflow-hidden mr-5 bg-leather-800"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy"><div class="absolute inset-0 flex items-center justify-center bg-black/60 group-hover:bg-black/20 transition-colors pointer-events-none">${typeIcon}</div></div><span class="text-chrome font-medium group-hover:text-white truncate flex-1 tracking-wide pointer-events-none">${media.name}</span>${actionBtnHtml}</div>`;
                 } else {
                     const playIconSize = currentViewMode === 'small' ? 'w-8 h-8 text-sm' : (currentViewMode === 'large' ? 'w-16 h-16 text-2xl' : 'w-12 h-12 text-lg');
                     const iconHtml = isVideo ? `<div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="${playIconSize} bg-leather-900/80 metallic-edge rounded-sm flex items-center justify-center text-chrome backdrop-blur-sm group-hover:bg-pride-red group-hover:text-white group-hover:scale-110 transition-all shadow-xl"><i class="fa-solid fa-play ml-1"></i></div></div>` : '';
                     const checkboxHtml = selectionMode ? `<div class="absolute top-3 left-3 w-8 h-8 rounded-sm metallic-edge flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-pride-red' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i class="fa-solid fa-check text-white text-sm"></i>' : ''}</div>` : '';
                     const actionBtnHtml = selectionMode ? '' : (viewingPlaylistId ? `<button onclick="event.stopPropagation(); removeFromPlaylist('${media.id}')" title="Quitar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-link-slash text-sm pointer-events-none"></i></button>` : `<button onclick="event.stopPropagation(); requestDeleteMedia(${index})" title="Eliminar" class="cursor-pointer absolute top-3 right-3 w-9 h-9 rounded-sm metallic-edge bg-black/80 hover:bg-pride-red text-chrome hover:text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-all backdrop-blur-sm z-20"><i class="fa-solid fa-trash-can text-sm pointer-events-none"></i></button>`);
-                    gridContainer.innerHTML += `<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none fade-in transition-all duration-300 hover:-translate-y-1 hover:border-chrome hover:shadow-2xl ${isSelected ? 'border-pride-red shadow-[0_0_15px_rgba(229,0,0,0.3)]' : 'shadow-black'}" onclick="${clickAction}"><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100 pointer-events-none" loading="lazy">${checkboxHtml}${selectionMode ? '' : iconHtml}${actionBtnHtml}<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none"><p class="text-white text-xs font-medium truncate tracking-wide">${media.name}</p></div></div></div>`;
+                    gridContainer.innerHTML += `<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none fade-in transition-all duration-300 hover:-translate-y-1 hover:border-chrome hover:shadow-2xl ${isSelected ? 'border-pride-red shadow-[0_0_15px_rgba(229,0,0,0.3)]' : 'shadow-black'}" ${pressHandlers}><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100 pointer-events-none" loading="lazy">${checkboxHtml}${selectionMode ? '' : iconHtml}${actionBtnHtml}<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none"><p class="text-white text-xs font-medium truncate tracking-wide">${media.name}</p></div></div></div>`;
                 }
             });
         }
