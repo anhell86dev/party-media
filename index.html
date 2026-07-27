@@ -183,7 +183,7 @@
 
         /* Botones y texto más grandes/fáciles de tocar en móvil */
         @media (max-width: 767px) {
-            #account-btn, #playlists-btn, #select-mode-btn, #lightbox-autoplay-btn {
+            #account-btn, #playlists-btn, #select-mode-btn, #lightbox-autoplay-btn, .sort-select {
                 min-height: 44px !important;
                 min-width: 44px !important;
             }
@@ -343,6 +343,17 @@
                     <i class="fa-solid fa-check-double text-sm pointer-events-none"></i>
                 </button>
 
+                <div class="relative">
+                    <i class="fa-solid fa-arrow-down-wide-short absolute left-3 top-1/2 -translate-y-1/2 text-chrome-dark text-xs pointer-events-none"></i>
+                    <select onchange="setSort(this.value)" title="Ordenar por" class="sort-select cursor-pointer h-10 pl-8 pr-3 bg-leather-800 rounded-sm border border-leather-700 hover:bg-leather-700 transition-colors text-chrome hover:text-white text-xs font-industrial uppercase tracking-widest appearance-none focus:outline-none focus:ring-1 focus:ring-pride-red">
+                        <option value="default">Predeterminado</option>
+                        <option value="date-desc">Fecha: recientes</option>
+                        <option value="date-asc">Fecha: antiguos</option>
+                        <option value="name-asc">Nombre: A-Z</option>
+                        <option value="name-desc">Nombre: Z-A</option>
+                    </select>
+                </div>
+
                 <div class="flex bg-leather-800 p-1 rounded-sm border border-leather-700 hidden md:flex items-center space-x-1 mr-2">
                     <button onclick="setViewMode('small')" class="cursor-pointer view-btn w-8 h-8 flex items-center justify-center rounded-sm text-chrome-dark hover:text-white transition-colors" data-view="small" title="Pequeños"><i class="fa-solid fa-border-all text-xs"></i></button>
                     <button onclick="setViewMode('medium')" class="cursor-pointer view-btn w-8 h-8 flex items-center justify-center rounded-sm bg-leather-700 shadow-sm text-pride-red transition-colors metallic-edge" data-view="medium" title="Medianos"><i class="fa-solid fa-border-all text-sm"></i></button>
@@ -487,7 +498,7 @@
             oauthClientId: '784487284585-0vr8s9arr0el8c0u88630gh8p8h9nkbh.apps.googleusercontent.com'
         };
 
-        let breadcrumbs = []; let currentFolders = []; let currentFiles = []; let currentFilter = 'all';
+        let breadcrumbs = []; let currentFolders = []; let currentFiles = []; let currentFilter = 'all'; let currentSort = 'default';
         let currentViewMode = 'medium'; let currentLightboxIndex = 0; let castAvailable = false;
         let rootFolders = []; let isViewingPlaylistRoot = false;
         let vjsPlayer = null; 
@@ -756,7 +767,7 @@ function closeEditTagsModal() {
 }
 
 document.getElementById('lightbox-tags-btn')?.addEventListener('click', () => {
-  const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+  const mediaArray = getVisibleMediaArray();
   const media = mediaArray[currentLightboxIndex];
   if (media) openEditTagsModal(media);
 });
@@ -950,7 +961,7 @@ async function addSelectionToPlaylist(playlistId) {
         function castCurrentMedia() {
             try {
                 if (!castAvailable) { showToast('Chromecast bloqueado por entorno seguro', true); return; }
-                const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+                const mediaArray = getVisibleMediaArray();
                 const media = mediaArray[currentLightboxIndex]; if (!media) return;
                 ensureDriveAuth(() => {
                     const context = cast.framework.CastContext.getInstance(); const existingSession = context.getCurrentSession();
@@ -1097,8 +1108,8 @@ async function addSelectionToPlaylist(playlistId) {
             ensureDriveAuth(() => { if (callback) callback(); });
         }
 
-        function requestDeleteMedia(index) { const arr = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); openConfirmDelete(arr[index]); }
-        function requestDeleteCurrentMedia() { const arr = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); openConfirmDelete(arr[currentLightboxIndex]); }
+        function requestDeleteMedia(index) { const arr = getVisibleMediaArray(); openConfirmDelete(arr[index]); }
+        function requestDeleteCurrentMedia() { const arr = getVisibleMediaArray(); openConfirmDelete(arr[currentLightboxIndex]); }
 
         function openConfirmDelete(media) {
             if (!media) return; const modal = document.getElementById('confirm-modal');
@@ -1335,7 +1346,7 @@ async function addSelectionToPlaylist(playlistId) {
 
         function toggleAutoplay() {
             autoplayEnabled = !autoplayEnabled; updateAutoplayButton();
-            const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+            const mediaArray = getVisibleMediaArray();
             const media = mediaArray[currentLightboxIndex];
             if (autoplayEnabled) { scheduleAutoAdvance(media); showToast('REPRODUCCIÓN SECUENCIAL ACTIVADA'); } else { clearAutoplayTimer(); const bar = document.getElementById('autoplay-progress-bar'); if (bar) bar.style.transition = 'none'; }
         }
@@ -1348,7 +1359,7 @@ async function addSelectionToPlaylist(playlistId) {
 
         function setPhotoDuration(ms) {
             photoDurationMs = parseInt(ms, 10);
-            const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+            const mediaArray = getVisibleMediaArray();
             const media = mediaArray[currentLightboxIndex];
             if (autoplayEnabled && media && media.type === 'image') scheduleAutoAdvance(media);
         }
@@ -1385,7 +1396,7 @@ async function addSelectionToPlaylist(playlistId) {
             renderBreadcrumbs();
             try {
                 const query = `'${folderId}' in parents and trashed=false`;
-                const items = await fetchFromDrive(query, 'files(id, name, mimeType, thumbnailLink, webContentLink, videoMediaMetadata)');
+                const items = await fetchFromDrive(query, 'files(id, name, mimeType, thumbnailLink, webContentLink, videoMediaMetadata, createdTime, modifiedTime)');
                 currentFolders = items.filter(f => f.mimeType === 'application/vnd.google-apps.folder').map(f => ({ id: f.id, name: f.name }));
                 currentFiles = items.filter(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/')).map(f => {
                     const isVideo = f.mimeType.startsWith('video/');
@@ -1393,6 +1404,7 @@ async function addSelectionToPlaylist(playlistId) {
                     
                     return { id: f.id, type: isVideo ? 'video' : 'image', mimeType: f.mimeType, name: f.name, durationMs: (isVideo && f.videoMediaMetadata && f.videoMediaMetadata.durationMillis) ? parseInt(f.videoMediaMetadata.durationMillis, 10) : null, url: f.webContentLink || `https://drive.google.com/uc?id=${f.id}`, previewUrl: `https://drive.google.com/file/d/${f.id}/preview`, 
                     downloadUrl: `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&key=${DRIVE_CONFIG.apiKey}&acknowledgeAbuse=true`, 
+                    date: f.createdTime || f.modifiedTime || null,
                     thumbnail: thumb };
                 });
                 document.getElementById('current-folder-title').textContent = folderName; renderGrid();
@@ -1412,6 +1424,29 @@ async function addSelectionToPlaylist(playlistId) {
             if (isViewingPlaylistRoot) showPlaylistsView(); else renderGrid();
         }
 
+        function sortMediaArray(arr, sortMode) {
+            const sorted = arr.slice();
+            switch (sortMode) {
+                case 'name-asc': sorted.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base', numeric: true })); break;
+                case 'name-desc': sorted.sort((a, b) => b.name.localeCompare(a.name, 'es', { sensitivity: 'base', numeric: true })); break;
+                case 'date-desc': sorted.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)); break;
+                case 'date-asc': sorted.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0)); break;
+                default: break; // 'default': orden tal cual lo entrega Drive
+            }
+            return sorted;
+        }
+
+        function getVisibleMediaArray() {
+            const filtered = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+            return sortMediaArray(filtered, currentSort);
+        }
+
+        function setSort(mode) {
+            currentSort = mode;
+            document.querySelectorAll('.sort-select').forEach(sel => { sel.value = mode; });
+            if (isViewingPlaylistRoot) showPlaylistsView(); else renderGrid();
+        }
+
         function setViewMode(mode) {
             currentViewMode = mode; document.querySelectorAll('.view-btn').forEach(btn => { if (btn.dataset.view === mode) { btn.classList.add('bg-leather-700', 'text-pride-red', 'metallic-edge'); btn.classList.remove('text-chrome-dark', 'hover:text-white'); } else { btn.classList.remove('bg-leather-700', 'text-pride-red', 'metallic-edge'); btn.classList.add('text-chrome-dark', 'hover:text-white'); } });
             if (isViewingPlaylistRoot) showPlaylistsView(); else renderGrid(); 
@@ -1419,7 +1454,7 @@ async function addSelectionToPlaylist(playlistId) {
 
         function renderGrid() {
             const gridContainer = document.getElementById('gallery-grid'); const emptyState = document.getElementById('empty-state'); gridContainer.innerHTML = '';
-            let displayFolders = currentFilter === 'all' ? currentFolders : []; let displayFiles = (currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter))
+            let displayFolders = currentFilter === 'all' ? currentFolders : []; let displayFiles = (getVisibleMediaArray())
   .filter(mediaMatchesTagSearch);
             if (displayFolders.length === 0 && displayFiles.length === 0) { 
                 gridContainer.classList.add('hidden'); emptyState.classList.remove('hidden'); 
@@ -1462,7 +1497,7 @@ async function addSelectionToPlaylist(playlistId) {
         }
 
         function openLightbox(index) {
-            currentLightboxIndex = index; const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter);
+            currentLightboxIndex = index; const mediaArray = getVisibleMediaArray();
             const lightbox = document.getElementById('lightbox'); updateLightboxContent(mediaArray);
             lightbox.classList.remove('hidden'); setTimeout(() => { lightbox.classList.remove('opacity-0'); }, 10); document.body.style.overflow = 'hidden';
         }
@@ -1675,8 +1710,8 @@ async function addSelectionToPlaylist(playlistId) {
             }, 300); 
         }
 
-        function prevMedia() { const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); currentLightboxIndex = (currentLightboxIndex > 0) ? currentLightboxIndex - 1 : mediaArray.length - 1; updateLightboxContent(mediaArray); }
-        function nextMedia() { const mediaArray = currentFilter === 'all' ? currentFiles : currentFiles.filter(m => m.type === currentFilter); currentLightboxIndex = (currentLightboxIndex < mediaArray.length - 1) ? currentLightboxIndex + 1 : 0; updateLightboxContent(mediaArray); }
+        function prevMedia() { const mediaArray = getVisibleMediaArray(); currentLightboxIndex = (currentLightboxIndex > 0) ? currentLightboxIndex - 1 : mediaArray.length - 1; updateLightboxContent(mediaArray); }
+        function nextMedia() { const mediaArray = getVisibleMediaArray(); currentLightboxIndex = (currentLightboxIndex < mediaArray.length - 1) ? currentLightboxIndex + 1 : 0; updateLightboxContent(mediaArray); }
 
         document.addEventListener('DOMContentLoaded', () => { checkExistingSession(); initGoogleAuth(); });
     </script>
