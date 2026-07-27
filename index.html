@@ -496,7 +496,7 @@
                 </div>
                 <button onclick="closeMediaPickerModal()" class="cursor-pointer text-chrome hover:text-white w-9 h-9 rounded-sm flex items-center justify-center hover:bg-leather-700 transition-colors flex-shrink-0"><i class="fa-solid fa-xmark text-lg pointer-events-none"></i></button>
             </div>
-            <div id="picker-grid" class="flex-1 overflow-y-auto p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div id="picker-grid" class="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-2">
                 <!-- Se llena con JS -->
             </div>
             <div class="flex items-center justify-between p-4 border-t border-leather-700 bg-leather-900/50">
@@ -1362,7 +1362,7 @@ async function addSelectionToPlaylist(playlistId) {
             if (pathIndex !== -1) { pickerBreadcrumbs = pickerBreadcrumbs.slice(0, pathIndex + 1); } else { pickerBreadcrumbs.push({ id: folderId, name: folderName }); }
             renderPickerBreadcrumbs();
             const grid = document.getElementById('picker-grid');
-            grid.innerHTML = '<p class="col-span-full text-center text-chrome-dark text-sm py-8 font-industrial uppercase tracking-widest">Cargando...</p>';
+            grid.innerHTML = '<p class="text-center text-chrome-dark text-sm py-8 font-industrial uppercase tracking-widest">Cargando...</p>';
             try {
                 const query = `'${folderId}' in parents and trashed=false`;
                 const items = await fetchFromDrive(query, 'files(id, name, mimeType, thumbnailLink, videoMediaMetadata)');
@@ -1374,7 +1374,7 @@ async function addSelectionToPlaylist(playlistId) {
                 });
                 renderPickerGrid();
             } catch (e) {
-                grid.innerHTML = '<p class="col-span-full text-center text-pride-red text-sm py-8 font-industrial uppercase tracking-widest">No se pudo cargar esta carpeta.</p>';
+                grid.innerHTML = '<p class="text-center text-pride-red text-sm py-8 font-industrial uppercase tracking-widest">No se pudo cargar esta carpeta.</p>';
             }
         }
 
@@ -1392,24 +1392,37 @@ async function addSelectionToPlaylist(playlistId) {
             const alreadyInPlaylist = new Set(pl && pl.items ? pl.items.map(i => i.id) : []);
 
             if (pickerFolders.length === 0 && pickerFiles.length === 0) {
-                grid.innerHTML = '<p class="col-span-full text-center text-chrome-dark text-sm py-8 font-industrial uppercase tracking-widest">Carpeta vacía.</p>';
+                grid.innerHTML = '<p class="text-center text-chrome-dark text-sm py-8 font-industrial uppercase tracking-widest">Carpeta vacía.</p>';
                 return;
             }
 
             let html = '';
             pickerFolders.forEach(folder => {
-                html += `<div class="group bg-leather-900 metallic-edge rounded-sm overflow-hidden cursor-pointer select-none transition-all hover:border-pride-red" onclick="pickerOpenFolder('${folder.id}', '${folder.name.replace(/'/g, "\\'")}')"><div class="aspect-square flex flex-col items-center justify-center p-3"><i class="fa-solid fa-folder text-4xl text-chrome group-hover:text-pride-red transition-colors mb-2 pointer-events-none"></i><span class="text-chrome font-industrial uppercase tracking-wider text-center text-xs truncate w-full px-1 group-hover:text-white pointer-events-none">${folder.name}</span></div></div>`;
+                html += `<div class="group flex items-center bg-leather-900 metallic-edge rounded-sm p-3 cursor-pointer select-none transition-all hover:border-pride-red" onclick="pickerOpenFolder('${folder.id}', '${folder.name.replace(/'/g, "\\'")}')">
+                    <div class="w-12 h-12 flex-shrink-0 bg-leather-800 rounded-sm flex items-center justify-center mr-4">
+                        <i class="fa-solid fa-folder text-xl text-chrome group-hover:text-pride-red transition-colors pointer-events-none"></i>
+                    </div>
+                    <span class="text-chrome font-industrial uppercase tracking-wider text-sm truncate flex-1 group-hover:text-white pointer-events-none">${folder.name}</span>
+                    <i class="fa-solid fa-chevron-right text-chrome-dark text-xs pointer-events-none"></i>
+                </div>`;
             });
             pickerFiles.forEach(media => {
                 const isVideo = media.type === 'video';
                 const already = alreadyInPlaylist.has(media.id);
                 const isSelected = pickerSelectedIds.has(media.id);
                 const badge = already
-                    ? `<div class="absolute top-2 left-2 w-7 h-7 rounded-sm bg-leather-700 border border-leather-600 flex items-center justify-center text-chrome-dark z-10 pointer-events-none" title="Ya está en la playlist"><i class="fa-solid fa-check text-xs"></i></div>`
-                    : `<div class="absolute top-2 left-2 w-7 h-7 rounded-sm metallic-edge flex items-center justify-center z-10 transition-colors pointer-events-none ${isSelected ? 'bg-pride-red' : 'bg-black/60'}">${isSelected ? '<i class="fa-solid fa-check text-white text-xs"></i>' : ''}</div>`;
+                    ? `<div class="w-7 h-7 rounded-sm bg-leather-700 border border-leather-600 flex items-center justify-center text-chrome-dark flex-shrink-0 pointer-events-none" title="Ya está en la playlist"><i class="fa-solid fa-check text-xs"></i></div>`
+                    : `<div class="w-7 h-7 rounded-sm metallic-edge flex items-center justify-center flex-shrink-0 transition-colors pointer-events-none ${isSelected ? 'bg-pride-red' : 'bg-leather-800'}">${isSelected ? '<i class="fa-solid fa-check text-white text-xs"></i>' : ''}</div>`;
                 const clickAction = already ? '' : `onclick="pickerToggleSelect('${media.id}')"`;
-                const typeIcon = isVideo ? '<i class="fa-solid fa-video absolute bottom-2 right-2 text-white text-xs drop-shadow pointer-events-none"></i>' : '';
-                html += `<div class="group relative bg-leather-900 metallic-edge rounded-sm overflow-hidden select-none transition-all ${already ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-pride-red'} ${isSelected ? 'border-pride-red shadow-[0_0_12px_rgba(229,0,0,0.3)]' : ''}" ${clickAction}><div class="aspect-square relative bg-leather-800 overflow-hidden"><img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy">${badge}${typeIcon}</div></div>`;
+                const typeIcon = isVideo ? '<i class="fa-solid fa-video text-xs text-white"></i>' : '<i class="fa-solid fa-image text-xs text-white"></i>';
+                html += `<div class="group flex items-center bg-leather-900 metallic-edge rounded-sm p-3 select-none transition-all ${already ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-pride-red'} ${isSelected ? 'border-pride-red shadow-[0_0_10px_rgba(229,0,0,0.2)]' : ''}" ${clickAction}>
+                    <div class="w-14 h-14 flex-shrink-0 relative rounded-sm overflow-hidden mr-4 bg-leather-800">
+                        <img src="${media.thumbnail}" alt="${media.name}" class="w-full h-full object-cover pointer-events-none" loading="lazy">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">${typeIcon}</div>
+                    </div>
+                    <span class="text-chrome font-medium group-hover:text-white truncate flex-1 tracking-wide pointer-events-none text-sm">${media.name}</span>
+                    <div class="ml-3">${badge}</div>
+                </div>`;
             });
             grid.innerHTML = html;
             updatePickerSelectionCount();
