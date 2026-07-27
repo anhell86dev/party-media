@@ -409,6 +409,9 @@
         <i class="fa-solid fa-chevron-right text-lg pointer-events-none"></i>
       </button>
       <div class="absolute bottom-6 right-6 z-20 flex gap-3 items-center">
+        <button id="lightbox-add-playlist-btn" onclick="openAddCurrentMediaToPlaylistModal()" title="Agregar a Playlist" class="cursor-pointer text-chrome hover:text-white bg-leather-900 border border-leather-700 hover:border-pride-red w-10 h-10 flex items-center justify-center transition-all shadow-lg">
+          <i class="fa-solid fa-plus text-sm pointer-events-none"></i>
+        </button>
         <div id="autoplay-controls" class="hidden items-center gap-2 select-none">
           <select id="autoplay-duration-select" onchange="setPhotoDuration(this.value)" title="Duración por foto" class="bg-leather-900 border border-leather-700 rounded-none text-xs font-industrial tracking-wider uppercase text-white px-2 h-10 focus:outline-none cursor-pointer">
             <option value="3000">3 Segundos</option>
@@ -1265,6 +1268,16 @@ async function addSelectionToPlaylist(playlistId) {
             const modal = document.getElementById('add-to-playlist-modal'); if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
         }
         function closeAddToPlaylistModal() { const modal = document.getElementById('add-to-playlist-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
+
+        // Botón "+" del lightbox: reutiliza el mismo modal de "Vincular a Playlist" que usa la
+        // selección múltiple, pero solo con la foto/video que se está viendo en ese momento.
+        function openAddCurrentMediaToPlaylistModal() {
+            const mediaArray = getVisibleMediaArray();
+            const media = mediaArray[currentLightboxIndex];
+            if (!media) return;
+            selectedIds = new Set([media.id]);
+            openAddToPlaylistModal();
+        }
 
         function renderAddToPlaylistList() {
             const container = document.getElementById('add-to-playlist-list'); if(!container) return;
